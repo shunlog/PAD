@@ -5,6 +5,8 @@ services:
       context: ./chat
     environment:
       - QUART_APP=app:app
+      - QUART_BODY_TIMEOUT=5
+      - QUART_RESPONSE_TIMEOUT=5
     command: quart run --port 8008 --host 0.0.0.0
     ports:
       - 8008:8008

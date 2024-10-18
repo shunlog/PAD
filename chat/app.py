@@ -6,6 +6,10 @@ from datetime import timedelta
 from broker import Broker
 
 app = Quart(__name__)
+# Load environment variables starting with QUART_
+# into the app config
+app.config.from_prefixed_env()
+print(app.config["RESPONSE_TIMEOUT"])
 rate_limiter = RateLimiter(app, default_limits=[
     RateLimit(1, timedelta(seconds=1)),
     RateLimit(3, timedelta(seconds=10))
