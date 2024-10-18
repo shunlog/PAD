@@ -46,6 +46,7 @@ COPY . .
 
 # Expose the port that the application listens on.
 EXPOSE 8000
+EXPOSE 8002
 
 # Run the application.
 # CMD python3 -m gunicorn app:app -b 0.0.0.0:8000

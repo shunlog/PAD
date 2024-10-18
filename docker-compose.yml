@@ -1,9 +1,18 @@
 services:
-  websocket-server:
+
+  chat:
     build:
-      context: ./websocket-server
+      context: ./chat
+    environment:
+      - QUART_APP=app:app
+    command: quart run --port 8008 --host 0.0.0.0
     ports:
-      - 8000:8000
+      - 8008:8008
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./chat
+          target: /app
       
   lobby-server:
     build:
@@ -11,7 +20,7 @@ services:
     ports:
       - 8001:8000
     environment:
-      - POSTGRES_SERVER=db
+      - POSTGRES_SERVER=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_DB=example
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password
@@ -20,6 +29,11 @@ services:
         condition: service_healthy
     secrets:
       - postgres-password
+    develop:
+      watch:
+        - action: sync
+          path: ./lobby-server
+          target: /app
       
   postgres:
     image: postgres
