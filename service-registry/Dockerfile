@@ -6,11 +6,21 @@ FROM golang:1.23.2 AS build-stage
 WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=bind,source=go.mod,target=go.mod \
+    go mod download -x
 
+
+COPY registry ./registry
 COPY *.go ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /docker-gs-ping
+ENV GOCACHE=/root/.cache/go-build
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=cache,target="/root/.cache/go-build" \
+    --mount=type=bind,target=. \
+    CGO_ENABLED=0 GOOS=linux go build -o /docker-gs-ping
+    
 
 # Run the tests in the container
 FROM build-stage AS run-test-stage
