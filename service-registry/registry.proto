@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package registry;
+
+service ServiceRegistry {
+    rpc RegisterService (ServiceInfo) returns (RegisterResponse);
+    rpc GetServiceInstances (ServiceQuery) returns (ServiceInstances);
+}
+
+message ServiceInfo {
+    string service_name = 1;
+    string address = 2;
+}
+
+message RegisterResponse {
+    bool success = 1;
+}
+
+message ServiceQuery {
+    string service_name = 1;
+}
+
+message ServiceInstances {
+    repeated ServiceInfo instances = 1;
+}
