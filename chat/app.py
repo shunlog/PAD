@@ -37,3 +37,39 @@ async def ws() -> None:
     finally:
         task.cancel()
         await task
+
+
+async def register_service(service_name, address):
+    while True:
+        print("Register service running")
+        await asyncio.sleep(1)
+
+    # async with grpc.aio.insecure_channel('localhost:50051') as channel:
+    #     registry_stub = registry_pb2_grpc.ServiceRegistryStub(channel)
+
+    #     service_info = registry_pb2.ServiceInfo(
+    #         service_name=service_name,
+    #         address=address
+    #     )
+
+    #     try:
+    #         response = await registry_stub.RegisterService(service_info)
+    #         if response.success:
+    #             print(f"Service {service_name} registered successfully!")
+    #         else:
+    #             print(f"Service {service_name} registration failed.")
+    #     except grpc.RpcError as e:
+    #         print(f"RPC error: {e}")
+
+
+@app.before_serving
+async def startup():
+    loop = asyncio.get_event_loop()
+
+    app.register_task = loop.create_task(register_service(
+        "example-python-service", "localhost:50052"))
+
+
+@app.after_serving
+async def shutdown():
+    app.register_task.cancel()
