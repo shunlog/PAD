@@ -1,7 +1,7 @@
 services:
 
 
-  docker-gs-ping:
+  service-registry:
     build:
       context: ./service-registry
     ports:

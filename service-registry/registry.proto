@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package registry;
 
-option go_package = "example/docker-ping/registry";
+option go_package = "service-registry/registry";
 
 service ServiceRegistry {
     rpc RegisterService (ServiceInfo) returns (RegisterResponse);

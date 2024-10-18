@@ -7,7 +7,7 @@ import (
     "sync"
 
     "google.golang.org/grpc"
-    pb "example/docker-ping/registry"
+    pb "service-registry/registry"
 )
 
 type registryServer struct {
