@@ -3,7 +3,10 @@ package main
 import (
     "context"
     "fmt"
+    "io/ioutil"
     "log"
+    "net/http"
+    "strings"
     "time"
 
     "google.golang.org/grpc"
@@ -12,11 +15,10 @@ import (
 
 const (
     registryAddress = "service-registry:50051" // Address of your Registry service
-    serviceName     = "chat" // The service name you want to query
 )
 
-// Function to query the registry for service instances
-func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) {
+// Function to query the registry for service instances and return them
+func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) []*pb.ServiceInfo {
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
     defer cancel()
 
@@ -27,13 +29,77 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
     resp, err := client.GetServiceInstances(ctx, query)
     if err != nil {
         log.Printf("Error calling GetServiceInstances: %v", err)
-        return
+        return nil
     }
 
-    // Print the service instances
-    fmt.Printf("Instances of service '%s':\n", serviceName)
-    for _, instance := range resp.Instances {
-        fmt.Printf("Service: %s, Address: %s\n", instance.ServiceName, instance.Address)
+    // Return the list of service instances
+    return resp.Instances
+}
+
+// Function to select an available service instance (just returns the first one for simplicity)
+func selectServiceInstance(instances []*pb.ServiceInfo) *pb.ServiceInfo {
+    if len(instances) > 0 {
+        return instances[0] // Select the first instance for now (round-robin or load balancing can be added later)
+    }
+    return nil
+}
+
+// HTTP handler to proxy requests to a service instance
+func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Parse the request URL to extract the service name
+        pathParts := strings.SplitN(r.URL.Path, "/", 3)
+        if len(pathParts) < 3 {
+            http.Error(w, "Invalid request format. Expected /service-name/endpoint", http.StatusBadRequest)
+            return
+        }
+
+        serviceName := pathParts[1] // The first part is the service name
+        endpointPath := "/" + pathParts[2] // The rest is the actual endpoint
+
+        // Query the service registry for available instances
+        instances := queryServiceInstances(client, serviceName)
+        if len(instances) == 0 {
+            http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
+            return
+        }
+
+        // Select an instance to forward the request to
+        instance := selectServiceInstance(instances)
+        if instance == nil {
+            http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
+            return
+        }
+
+        // Proxy the request to the selected service instance
+        proxyURL := fmt.Sprintf("http://%s%s", instance.Address, endpointPath)
+        proxyReq, err := http.NewRequest(r.Method, proxyURL, r.Body)
+        if err != nil {
+            http.Error(w, "Failed to create proxy request", http.StatusInternalServerError)
+            return
+        }
+
+        // Forward the headers from the original request
+        proxyReq.Header = r.Header
+
+        // Perform the request
+        client := &http.Client{}
+        resp, err := client.Do(proxyReq)
+        if err != nil {
+            http.Error(w, "Failed to reach service instance", http.StatusBadGateway)
+            return
+        }
+        defer resp.Body.Close()
+
+        // Copy the response back to the original client
+        body, err := ioutil.ReadAll(resp.Body)
+        if err != nil {
+            http.Error(w, "Failed to read response body", http.StatusInternalServerError)
+            return
+        }
+
+        w.WriteHeader(resp.StatusCode)
+        w.Write(body)
     }
 }
 
@@ -48,13 +114,24 @@ func main() {
     // Create a client for the ServiceRegistry
     client := pb.NewServiceRegistryClient(conn)
 
-    // Query the service instances every 5 seconds
+    // Start the HTTP server in a goroutine
+    go func() {
+        http.HandleFunc("/", proxyHandler(client))
+        log.Println("Starting HTTP server on port 5000...")
+        log.Fatal(http.ListenAndServe(":5000", nil))
+    }()
+
+    // Main loop that queries the service instances every 5 seconds (for logging or monitoring, optional)
     ticker := time.NewTicker(5 * time.Second)
     defer ticker.Stop()
 
-    // Loop that queries the service instances every 5 seconds
     for {
-        queryServiceInstances(client, serviceName)
+        instances := queryServiceInstances(client, "example-service")
+        if len(instances) > 0 {
+            log.Printf("Service instances found: %v\n", instances)
+        } else {
+            log.Printf("No instances found\n")
+        }
         <-ticker.C // Wait for the next tick (5 seconds)
     }
 }

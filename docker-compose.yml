@@ -3,9 +3,12 @@ services:
   gateway:
     build:
       context: ./gateway
+    ports:
+      - 5000:5000
     depends_on:
       service-registry:
         condition: service_started
+       
     
   service-registry:
     build:
