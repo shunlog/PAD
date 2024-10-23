@@ -48,7 +48,7 @@ services:
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
-    command: quart run --port 8008 --host 0.0.0.0
+    command: quart --debug run --port 8008 --host 0.0.0.0
     depends_on:
       service-registry:
         condition: service_started
@@ -58,39 +58,49 @@ services:
           path: ./chat
           target: /app
 
-      
-  lobby-server:
+
+  users-1:
     build:
-      context: ./lobby-server
+      context: ./users
     ports:
-      - 8001:8000
+      - 8009:8009
+    secrets:
+      - postgres-users-password
     environment:
-      - POSTGRES_SERVER=postgres
+      - HOSTNAME=users-1
+      - SERVICE_NAME=users
+      - PORT=8009
+      - QUART_APP=app:app
+      - QUART_BODY_TIMEOUT=5
+      - QUART_RESPONSE_TIMEOUT=5
+      - POSTGRES_SERVER=postgres-users
       - POSTGRES_USER=postgres
       - POSTGRES_DB=example
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
+    command: quart --debug run --port 8009 --host 0.0.0.0
     depends_on:
-      postgres:
-        condition: service_healthy
-    secrets:
-      - postgres-password
+      service-registry:
+        condition: service_started
+      postgres-users:
+        condition: service_healthy       
     develop:
       watch:
-        - action: sync
-          path: ./lobby-server
+        - action: sync+restart
+          path: ./users
           target: /app
-      
-  postgres:
+
+
+  postgres-users:
     image: postgres
     restart: always
     user: postgres
     secrets:
-      - postgres-password
+      - postgres-users-password
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-postgres-users:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=example
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
     expose:
       - 5432
     healthcheck:
@@ -100,8 +110,8 @@ services:
       retries: 5
       
 volumes:
-  db-data:
+  db-postgres-users:
   
 secrets:
-  postgres-password:
-    file: lobby-server/postgres-password.txt
+  postgres-users-password:
+    file: users/postgres-password.txt
