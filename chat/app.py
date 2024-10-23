@@ -45,9 +45,7 @@ async def ws() -> None:
 async def register_service(service_name, address):
 
     async def send_info():
-        print("Trying to contact registry")
         with grpc.insecure_channel('service-registry:50051') as channel:
-            print("Connected to registry")
             registry_stub = registry_pb2_grpc.ServiceRegistryStub(channel)
 
             # Create the service info object
@@ -60,9 +58,9 @@ async def register_service(service_name, address):
             try:
                 response = registry_stub.RegisterService(service_info)
                 if response.success:
-                    print(f"Service {service_name} registered successfully!")
+                    print(f"Registered {service_name}")
                 else:
-                    print(f"Service {service_name} registration failed.")
+                    print(f"Failed register")
             except grpc.RpcError as e:
                 print(f"RPC error: {e}")
 
@@ -71,7 +69,7 @@ async def register_service(service_name, address):
             await send_info()
         except RuntimeError as e:
             print(e)
-        await asyncio.sleep(5)
+        await asyncio.sleep(15)
 
 
 def task_done_callback(task):
@@ -82,19 +80,20 @@ def task_done_callback(task):
 
 
 @app.before_serving
-async def startup():
-
-    loop = asyncio.get_event_loop()
-
+async def startup_RPC_task():
     hostname = os.getenv('HOSTNAME', '0.0.0.0')
     service_name = os.getenv('SERVICE_NAME')
     port = int(os.getenv('PORT', 5000))
+
+    loop = asyncio.get_event_loop()
     app.register_task = loop.create_task(register_service(
         service_name, f"{hostname}:{port}"))
 
     app.register_task.add_done_callback(task_done_callback)
+    print("Registered RPC task")
 
 
 @app.after_serving
-async def shutdown():
+async def shutdown_RPC_task():
     app.register_task.cancel()
+    print("Shut down RPC task")

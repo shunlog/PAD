@@ -9,7 +9,7 @@ import (
     "strings"
     "time"
 
-    "google.golang.org/grpc"
+		"google.golang.org/grpc"
     pb "gateway/registry"  // Update with actual path to generated proto
 )
 
@@ -36,13 +36,23 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
     return resp.Instances
 }
 
-// Function to select an available service instance (just returns the first one for simplicity)
+
+var roundRobinIndex = 0 // Track the index for round-robin selection
+
 func selectServiceInstance(instances []*pb.ServiceInfo) *pb.ServiceInfo {
-    if len(instances) > 0 {
-        return instances[0] // Select the first instance for now (round-robin or load balancing can be added later)
+    if len(instances) == 0 {
+        return nil
     }
-    return nil
+
+    // Select the instance at the current index
+    selectedInstance := instances[roundRobinIndex]
+
+    // Move to the next index, wrapping around if necessary
+    roundRobinIndex = (roundRobinIndex + 1) % len(instances)
+
+    return selectedInstance
 }
+
 
 // HTTP handler to proxy requests to a service instance
 func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
@@ -103,6 +113,7 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
     }
 }
 
+
 func main() {
     // Connect to the gRPC server
     conn, err := grpc.Dial(registryAddress, grpc.WithInsecure(), grpc.WithBlock())
@@ -114,24 +125,11 @@ func main() {
     // Create a client for the ServiceRegistry
     client := pb.NewServiceRegistryClient(conn)
 
-    // Start the HTTP server in a goroutine
-    go func() {
-        http.HandleFunc("/", proxyHandler(client))
-        log.Println("Starting HTTP server on port 5000...")
-        log.Fatal(http.ListenAndServe(":5000", nil))
-    }()
+	// Start the HTTP server
+		http.HandleFunc("/", proxyHandler(client))
 
-    // Main loop that queries the service instances every 5 seconds (for logging or monitoring, optional)
-    ticker := time.NewTicker(5 * time.Second)
-    defer ticker.Stop()
+	log.Println("Starting HTTP server on port 5000...")
+	log.Fatal(http.ListenAndServe(":5000", nil))
 
-    for {
-        instances := queryServiceInstances(client, "example-service")
-        if len(instances) > 0 {
-            log.Printf("Service instances found: %v\n", instances)
-        } else {
-            log.Printf("No instances found\n")
-        }
-        <-ticker.C // Wait for the next tick (5 seconds)
-    }
+		
 }

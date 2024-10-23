@@ -16,11 +16,11 @@ services:
     ports:
       - 50051:50051
 
-  chat:
+  chat-1:
     build:
       context: ./chat
     environment:
-      - HOSTNAME=chat
+      - HOSTNAME=chat-1
       - SERVICE_NAME=chat
       - PORT=8008
       - QUART_APP=app:app
@@ -37,6 +37,27 @@ services:
         - action: sync+restart
           path: ./chat
           target: /app
+
+  chat-2:
+    build:
+      context: ./chat
+    environment:
+      - HOSTNAME=chat-2
+      - SERVICE_NAME=chat
+      - PORT=8008
+      - QUART_APP=app:app
+      - QUART_BODY_TIMEOUT=5
+      - QUART_RESPONSE_TIMEOUT=5
+    command: quart run --port 8008 --host 0.0.0.0
+    depends_on:
+      service-registry:
+        condition: service_started
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./chat
+          target: /app
+
       
   lobby-server:
     build:
