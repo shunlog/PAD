@@ -79,7 +79,7 @@ services:
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
     # command: quart --debug run --port 8009 --host 0.0.0.0
     # Task timeout = keep-alive
-    command: python3 -m hypercorn --keep-alive 5 app:app -b 0.0.0.0:8009
+    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8009
     depends_on:
       # service-registry:
       #   condition: service_started

@@ -7,11 +7,21 @@ It aims to provide an online Tetris experience similar to [Jstris](https://jstri
 # Usage
 
 Create the password files mentioned in `docker-compose.yml`:
-- `postgres-password.txt`
+- `users/postgres-password.txt`
+- `chat/postgres-password.txt`
 
 Run:
 ```sh
 docker compose up --build
+```
+
+# Task timeout
+
+Controlled by the `keep-alive` option on the ASGI server.
+The connection is closed after 3 seconds if no data is sent over.
+Run this and wait:
+```sh
+telnet localhost 8009
 ```
 
 # Concurrent task limit (rate limiting)
