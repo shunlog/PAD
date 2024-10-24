@@ -16,6 +16,7 @@ services:
     ports:
       - 50051:50051
 
+
   chat-1:
     build:
       context: ./chat
@@ -26,37 +27,42 @@ services:
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
-    command: quart run --port 8008 --host 0.0.0.0
+    # command: quart run --port 8008 --host 0.0.0.0
+    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
     ports:
       - 8008:8008
     depends_on:
       service-registry:
         condition: service_started
+      postgres-chat:
+        condition: service_healthy
     develop:
       watch:
         - action: sync+restart
           path: ./chat
           target: /app
 
-  chat-2:
-    build:
-      context: ./chat
+
+  postgres-chat:
+    image: postgres
+    restart: always
+    user: postgres
+    secrets:
+      - postgres-chat-password
+    volumes:
+      - db-postgres-chat:/var/lib/postgresql/data
     environment:
-      - HOSTNAME=chat-2
-      - SERVICE_NAME=chat
-      - PORT=8008
-      - QUART_APP=app:app
-      - QUART_BODY_TIMEOUT=5
-      - QUART_RESPONSE_TIMEOUT=5
-    command: quart --debug run --port 8008 --host 0.0.0.0
-    depends_on:
-      service-registry:
-        condition: service_started
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./chat
-          target: /app
+      - POSTGRES_DB=chat
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-chat-password
+    expose:
+      - 5432
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    ports:
+      - 5434:5432
 
 
   users-1:
@@ -79,7 +85,7 @@ services:
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
     # command: quart --debug run --port 8009 --host 0.0.0.0
     # Task timeout = keep-alive
-    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8009
+    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8009 --access-logfile -
     depends_on:
       # service-registry:
       #   condition: service_started
@@ -116,7 +122,11 @@ services:
       
 volumes:
   db-postgres-users:
+  db-postgres-chat:
   
 secrets:
   postgres-users-password:
     file: users/postgres-password.txt
+  postgres-chat-password:
+    file: chat/postgres-password.txt
+

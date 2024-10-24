@@ -22,6 +22,11 @@ rate_limiter = RateLimiter(app, default_limits=[
 broker = Broker()
 
 
+@app.route('/status')
+async def status_view():
+    return jsonify({"status": "Alive"})
+
+
 @app.get("/")
 async def index():
     return await render_template("index.html")
