@@ -14,6 +14,16 @@ Run:
 docker compose up --build
 ```
 
+# Concurrent task limit (rate limiting)
+
+Make 4 requests in less than 10 seconds, the 4th one will be rejected because of rate limiting:
+```sh
+curl http://localhost:8009/status
+curl http://localhost:8009/status
+curl http://localhost:8009/status
+curl http://localhost:8009/status
+```
+
 # Docs
 
 ## Application Suitability Assessment

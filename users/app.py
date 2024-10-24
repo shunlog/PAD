@@ -1,7 +1,9 @@
 import asyncio
+from datetime import timedelta
 
 import click
 from quart import Quart, request, jsonify
+from quart_rate_limiter import RateLimiter, RateLimit
 
 from db import get_db
 from auth import register, create_session, logout, verify_token
@@ -9,6 +11,14 @@ from auth import register, create_session, logout, verify_token
 
 app = Quart(__name__)
 SECRET_KEY = "your_secret_key"
+
+# Load environment variables starting with QUART_
+# into the app config
+app.config.from_prefixed_env()
+
+rate_limiter = RateLimiter(app, default_limits=[
+    RateLimit(3, timedelta(seconds=10))
+])
 
 
 async def _init_db():
@@ -24,6 +34,11 @@ async def _init_db():
 def cli_init_db():
     click.echo('Recreating database tables.')
     asyncio.get_event_loop().run_until_complete(_init_db())
+
+
+@app.route('/status')
+async def status_view():
+    return jsonify({"status": "Alive"})
 
 
 @app.route('/register', methods=['POST'])

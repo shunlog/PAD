@@ -47,5 +47,3 @@ COPY . .
 # Expose the port that the application listens on.
 EXPOSE 8008
 
-# Run the application.
-CMD python3 -m hypercorn app:app -b 0.0.0.0:8009

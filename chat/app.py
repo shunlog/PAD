@@ -1,10 +1,11 @@
 import asyncio
-from quart import Quart, render_template, websocket
-from quart_rate_limiter import RateLimiter, RateLimit
 from datetime import timedelta
 import os
 
 import grpc
+from quart import Quart, render_template, websocket
+from quart_rate_limiter import RateLimiter, RateLimit
+
 import registry_pb2
 import registry_pb2_grpc
 from broker import Broker
@@ -13,10 +14,11 @@ app = Quart(__name__)
 # Load environment variables starting with QUART_
 # into the app config
 app.config.from_prefixed_env()
+
 rate_limiter = RateLimiter(app, default_limits=[
-    RateLimit(1, timedelta(seconds=1)),
     RateLimit(3, timedelta(seconds=10))
 ])
+
 broker = Broker()
 
 
