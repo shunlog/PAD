@@ -19,7 +19,8 @@ services:
 
   chat-1:
     build:
-      context: ./chat
+      context: .
+      dockerfile: Dockerfile-chat
     environment:
       - HOSTNAME=chat-1
       - SERVICE_NAME=chat
@@ -67,7 +68,8 @@ services:
 
   users-1:
     build:
-      context: ./users
+      context: .
+      dockerfile: Dockerfile-users
     ports:
       - 8009:8009
     secrets:

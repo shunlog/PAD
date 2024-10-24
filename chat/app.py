@@ -3,7 +3,7 @@ from datetime import timedelta
 import os
 
 import grpc
-from quart import Quart, render_template, websocket
+from quart import Quart, render_template, websocket, jsonify
 from quart_rate_limiter import RateLimiter, RateLimit
 
 import registry_pb2
