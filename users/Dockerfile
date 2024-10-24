@@ -48,4 +48,4 @@ COPY . .
 EXPOSE 8008
 
 # Run the application.
-# CMD python3 -m gunicorn app:app -b 0.0.0.0:8000
+CMD python3 -m hypercorn app:app -b 0.0.0.0:8009

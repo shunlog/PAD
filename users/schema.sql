@@ -8,9 +8,8 @@ CREATE TABLE users (
 );
 
 CREATE TABLE sessions (
-    id SERIAL PRIMARY KEY,
+    token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    token TEXT NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

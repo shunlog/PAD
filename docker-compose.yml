@@ -77,10 +77,10 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_DB=example
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
-    command: quart --debug run --port 8009 --host 0.0.0.0
+    # command: quart --debug run --port 8009 --host 0.0.0.0
     depends_on:
-      service-registry:
-        condition: service_started
+      # service-registry:
+      #   condition: service_started
       postgres-users:
         condition: service_healthy       
     develop:
@@ -105,9 +105,12 @@ services:
       - 5432
     healthcheck:
       test: ["CMD", "pg_isready"]
-      interval: 10s
+      interval: 3s
       timeout: 5s
       retries: 5
+    ports:
+      - 5433:5432
+
       
 volumes:
   db-postgres-users:

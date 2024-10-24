@@ -1,70 +1,40 @@
-import os
-import uuid
-import datetime
 import asyncio
 
 import click
-import psycopg
 from quart import Quart, request, jsonify
 
-from hashing import check_password, hash_password
+from db import get_db
+from auth import register, create_session, logout, verify_token
+
 
 app = Quart(__name__)
 SECRET_KEY = "your_secret_key"
 
 
-def read_password_file(filepath):
-    with open(filepath, 'r') as file:
-        return file.read().strip()
-
-
-async def _get_db():
-    user = os.getenv("POSTGRES_USER")
-    db = os.getenv("POSTGRES_DB")
-    pwd = read_password_file(os.getenv("POSTGRES_PASSWORD_FILE"))
-    server = os.getenv("POSTGRES_SERVER")
-    db_url = f"postgresql://{user}:{pwd}@{server}/{db}"
-    return await psycopg.AsyncConnection.connect(db_url)
-
-
 async def _init_db():
-    conn = await _get_db()
-    with open(app.root_path + "/schema.sql", mode="r") as file:
+    sql_file = app.root_path + "/schema.sql"
+    conn = await get_db()
+    with open(sql_file, mode="r") as file:
         async with conn.cursor() as cur:
             await cur.execute(file.read())
             await conn.commit()
 
 
 @app.cli.command()
-def init_db():
+def cli_init_db():
     click.echo('Recreating database tables.')
-    result = asyncio.get_event_loop().run_until_complete(_init_db())
-
-
-async def _register(username, password) -> bool:
-    salt, password_hash = hash_password(password)
-
-    conn = await _get_db()
-    async with conn.cursor() as cur:
-        try:
-            await cur.execute(
-                'INSERT INTO users (username, password_hash, salt) VALUES (%s, %s, %s)',
-                (username, password_hash, salt)
-            )
-            await conn.commit()
-            return True
-        except psycopg.errors.UniqueViolation:
-            return False
+    asyncio.get_event_loop().run_until_complete(_init_db())
 
 
 @app.route('/register', methods=['POST'])
-async def register():
+async def register_view():
     data = await request.get_json()
     username = data['username']
     password = data['password']
 
-    ok = await _register(username, password)
-    if not ok:
+    try:
+        await register(username, password)
+    except ValueError:
         return jsonify({"error": "Username already exists"}), 400
 
     return jsonify({"message": "User registered successfully"}), 201
@@ -76,42 +46,30 @@ async def login():
     username = data['username']
     password = data['password']
 
-    conn = await _get_db()
-    async with conn.cursor() as cur:
-        await cur.execute(
-            'SELECT id, password_hash, salt FROM users WHERE username=%s', (
-                username,)
-        )
-        user = await cur.fetchone()
+    try:
+        token = await create_session(username, password)
+    except ValueError:
+        return jsonify({"error": "Invalid credentials"}), 401
 
-        if not user:
-            return jsonify({"error": "Invalid credentials"}), 401
-
-        id, password_hash, salt = user
-        if not check_password(salt, password_hash, password):
-            return jsonify({"error": "Invalid credentials"}), 401
-
-        # Generate a bearer token
-        token = str(uuid.uuid4())
-        expiration = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-        await cur.execute(
-            'INSERT INTO sessions (user_id, token, expires_at) VALUES (%s, %s, %s)',
-            (user[0], token, expiration)
-        )
-        await conn.commit()
-        return jsonify({"token": token})
+    return jsonify({"token": token})
 
 
 @app.route('/logout', methods=['POST'])
-async def logout():
-    token = request.headers.get('Authorization').split()[1]  # Bearer token
-
-    conn = await _get_db()
-    async with conn.cursor() as cur:
-        await cur.execute('DELETE FROM sessions WHERE token=%s', (token,))
-        await conn.commit()
-
+async def logout_view():
+    token = request.headers.get('Authorization').split()[1]
+    await logout(token)
     return jsonify({"message": "Logged out"}), 200
+
+
+@app.route('/verify', methods=['GET'])
+async def verify_view():
+    token = request.headers.get('Authorization').split()[1]
+
+    exists = await verify_token(token)
+    if not exists:
+        return jsonify({"message": "Invalid token"}), 401
+
+    return jsonify({"message": "Token is valid"}), 200
 
 
 @app.before_serving
