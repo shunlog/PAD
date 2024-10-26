@@ -19,8 +19,6 @@ rate_limiter = RateLimiter(app, default_limits=[
     RateLimit(3, timedelta(seconds=10))
 ])
 
-broker = Broker()
-
 
 @app.route('/status')
 async def status_view():
@@ -32,21 +30,56 @@ async def index():
     return await render_template("index.html")
 
 
-async def _receive() -> None:
-    while True:
-        message = await websocket.receive()
-        await broker.publish(message)
+# Store connected clients by chatroom
+connected_clients = {}
 
 
-@app.websocket("/ws")
-async def ws() -> None:
+async def listen_for_messages():
+    async with psycopg.AsyncConnection.connect("dbname=yourdb user=youruser password=yourpass") as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("LISTEN chat_messages;")
+            print("Listening for new messages...")
+
+            while True:
+                await conn.wait(notify=True)
+                async for notify in conn.notifies():
+                    print("Received notification:", notify.payload)
+                    # Broadcast to clients in the relevant chatroom
+                    # Extract chatroom_id from the payload
+                    chatroom_id = notify.payload.split()[-1]
+                    await broadcast_to_clients(chatroom_id, notify.payload)
+
+
+async def broadcast_to_clients(chatroom_id, message):
+    if chatroom_id in connected_clients:
+        for client in connected_clients[chatroom_id]:
+            await client.send(message)
+
+
+@app.websocket('/chat/<chatroom_id>')
+async def chat(chatroom_id):
+    # Register the new client
+    if chatroom_id not in connected_clients:
+        connected_clients[chatroom_id] = set()
+
+    # Add the client to the set
+    client = websocket._get_current_object()
+    connected_clients[chatroom_id].add(client)
+
     try:
-        task = asyncio.ensure_future(_receive())
-        async for message in broker.subscribe():
-            await websocket.send(message)
+        while True:
+            # Handle incoming messages (if needed)
+            data = await websocket.receive()
+            # Optionally process incoming messages here
+            # Example: Insert new messages into the database
+            await insert_message(chatroom_id, "sender_id_placeholder", data)
+
+    except Exception as e:
+        print(f"Client disconnected: {e}")
+
     finally:
-        task.cancel()
-        await task
+        # Remove the client from the set on disconnect
+        connected_clients[chatroom_id].remove(client)
 
 
 async def register_service(service_name, address):

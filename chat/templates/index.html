@@ -1,5 +1,5 @@
 <script type="text/javascript">
-  const ws = new WebSocket(`ws://${location.host}/ws`);
+  const ws = new WebSocket(`ws://${location.host}/chat/id1`);
 
   ws.addEventListener('message', function (event) {
     const li = document.createElement("li");
