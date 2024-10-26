@@ -1,6 +1,7 @@
 package main
 
 import (
+    "sync"
     "context"
     "fmt"
     "io/ioutil"
@@ -16,9 +17,32 @@ import (
 const (
     registryAddress = "service-registry:50051" // Address of your Registry service
 )
+var (
+    // Cache to store last call timestamps for service queries
+    serviceCache = make(map[string]cachedServiceInfo)
+    mu           sync.Mutex // Mutex to protect access to the cache
+)
+
+type cachedServiceInfo struct {
+    instances []*pb.ServiceInfo
+    lastCall  time.Time
+}
+
+// Cooldown period for querying the service registry
+const cooldownPeriod = time.Second * 10
 
 // Function to query the registry for service instances and return them
 func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) []*pb.ServiceInfo {
+    mu.Lock()
+    cachedInfo, exists := serviceCache[serviceName]
+    mu.Unlock()
+
+    // Check if the cached value is still valid
+    if exists && time.Since(cachedInfo.lastCall) < cooldownPeriod {
+		fmt.Printf("Returning cached instances for %s\n", serviceName)
+        return cachedInfo.instances // Return cached instances
+    }
+
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
     defer cancel()
 
@@ -32,10 +56,17 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
         return nil
     }
 
+    // Cache the new instances and update the last call timestamp
+    mu.Lock()
+    serviceCache[serviceName] = cachedServiceInfo{
+        instances: resp.Instances,
+        lastCall:  time.Now(),
+    }
+    mu.Unlock()
+
     // Return the list of service instances
     return resp.Instances
 }
-
 
 var roundRobinIndex = 0 // Track the index for round-robin selection
 
