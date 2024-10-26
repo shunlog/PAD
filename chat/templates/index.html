@@ -16,8 +16,7 @@
             if (ws) {
                 ws.close(); // Close existing connection if present
             }
-
-            ws = new WebSocket(`ws://${location.host}/chat/${chatroom}`);
+            ws = new WebSocket(`ws://127.0.0.1:{{port}}/chat/${chatroom}`);
 
             ws.addEventListener('message', function (event) {
                 const li = document.createElement("li");

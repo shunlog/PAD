@@ -12,6 +12,12 @@ import registry_pb2
 import registry_pb2_grpc
 from db import get_db
 
+
+hostname = os.getenv('HOSTNAME', '0.0.0.0')
+service_name = os.getenv('SERVICE_NAME')
+port = int(os.getenv('PORT', 5000))
+
+
 app = Quart(__name__)
 # Load environment variables starting with QUART_
 # into the app config
@@ -44,7 +50,7 @@ async def status_view():
 
 @app.get("/")
 async def index():
-    return await render_template("index.html")
+    return await render_template("index.html", hostname=hostname, port=port)
 
 
 # Store connected clients by chatroom
@@ -156,9 +162,6 @@ def task_done_callback(task):
 
 @app.before_serving
 async def startup_RPC_task():
-    hostname = os.getenv('HOSTNAME', '0.0.0.0')
-    service_name = os.getenv('SERVICE_NAME')
-    port = int(os.getenv('PORT', 5000))
 
     loop = asyncio.get_event_loop()
     app.register_task = loop.create_task(register_service(

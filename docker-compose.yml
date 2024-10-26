@@ -58,7 +58,7 @@ services:
     environment:
       - HOSTNAME=chat-2
       - SERVICE_NAME=chat
-      - PORT=8008
+      - PORT=8009
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
@@ -66,10 +66,10 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_DB=chat
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-chat-password
-    # command: quart run --port 8008 --host 0.0.0.0
-    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
+    # command: quart run --port 8009 --host 0.0.0.0
+    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8009 --access-logfile -
     ports:
-      - 8009:8008
+      - 8009:8009
     depends_on:
       service-registry:
         condition: service_started
