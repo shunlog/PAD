@@ -34,6 +34,40 @@ curl http://localhost:8009/status
 curl http://localhost:8009/status
 ```
 
+
+# Chat service
+
+```
+http GET :8008/status
+http GET :8009/status
+```
+
+# Users service
+
+```
+http GET :8010/status
+
+http POST :8010/register username=admin password=root
+http -v POST :8010/login username=admin password=root
+token=
+http -v -A bearer -a $token :8010/verify
+http -v -A bearer -a $token POST :8010/logout
+http -v -A bearer -a $token :8010/verify
+```
+
+# Status
+
+Service registry:
+```
+http GET :8080/status
+```
+
+Gateway:
+```
+http GET :5000/status
+```
+
+
 # Docs
 
 ## Application Suitability Assessment

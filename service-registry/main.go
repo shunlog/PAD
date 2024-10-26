@@ -5,7 +5,9 @@ import (
 	"log"
 	"net"
 	"sync"
-
+    "encoding/json"
+    "net/http"
+	
 	"google.golang.org/grpc"
 	pb "service-registry/registry"
 )
@@ -32,6 +34,39 @@ func NewServiceRegistry() *ServiceRegistry {
 		services: make(map[string]Set),
 	}
 }
+
+// HealthCheckResponse defines the structure of the health check response.
+type HealthCheckResponse struct {
+    Status        string   `json:"status"`
+    Services      []string `json:"services"`
+    ServicesCount int      `json:"services_count"`
+}
+
+// HealthCheckHandler returns the status and services in JSON format.
+func (sr *ServiceRegistry) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+    sr.mu.RLock() // Acquire read lock
+    defer sr.mu.RUnlock() // Ensure the lock is released
+
+    // Prepare the response
+    response := HealthCheckResponse{
+        Status:        "Alive",
+        Services:      make([]string, 0, len(sr.services)),
+        ServicesCount: 0,
+    }
+
+    // Iterate over the services to populate the response
+    for serviceName, addresses := range sr.services {
+        response.Services = append(response.Services, serviceName)
+        response.ServicesCount += len(addresses) // Add count of service instances
+    }
+
+    // Set the response header and encode the response as JSON
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(response)
+}
+
+
 
 func (s *ServiceRegistry) AddService(serviceName, address string) {
 	s.mu.Lock()         // Lock for exclusive access
@@ -83,8 +118,16 @@ func main() {
 	registry := NewServiceRegistry()                       // Initialize the ServiceRegistry instance
 	pb.RegisterServiceRegistryServer(grpcServer, registry) // Use the initialized instance
 
+    // Set up the HTTP server and routes
+    http.HandleFunc("/status", registry.HealthCheckHandler)
+    go http.ListenAndServe(":8080", nil)
+
+	
 	log.Println("Service Registry running on port 50051")
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+
+	
+	
 }

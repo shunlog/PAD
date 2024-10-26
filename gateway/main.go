@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
     "sync"
     "context"
     "fmt"
@@ -144,6 +145,18 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
     }
 }
 
+type HealthCheckResponse struct {
+    Status        string   `json:"status"`
+}
+
+
+func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+    data := HealthCheckResponse{Status: "Alive"}
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(data)
+}
+
 
 func main() {
     // Connect to the gRPC server
@@ -157,7 +170,10 @@ func main() {
     client := pb.NewServiceRegistryClient(conn)
 
 	// Start the HTTP server
-		http.HandleFunc("/", proxyHandler(client))
+	http.HandleFunc("/", proxyHandler(client))
+    // Set up the HTTP server and routes
+    http.HandleFunc("/status", HealthCheckHandler)
+
 
 	log.Println("Starting HTTP server on port 5000...")
 	log.Fatal(http.ListenAndServe(":5000", nil))
