@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS messages;
+
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    chatroom_id VARCHAR(255) NOT NULL,  
+    user_id VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

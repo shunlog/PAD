@@ -21,6 +21,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-chat
+    secrets:
+      - postgres-chat-password
     environment:
       - HOSTNAME=chat-1
       - SERVICE_NAME=chat
@@ -28,6 +30,10 @@ services:
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
+      - POSTGRES_SERVER=postgres-chat
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=chat
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-chat-password
     # command: quart run --port 8008 --host 0.0.0.0
     command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
     ports:
