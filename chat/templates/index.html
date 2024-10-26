@@ -1,27 +1,68 @@
-<script type="text/javascript">
-  const ws = new WebSocket(`ws://${location.host}/chat/id1`);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+</head>
+<body>
+    <script type="text/javascript">
+        let ws;
 
-  ws.addEventListener('message', function (event) {
-    const li = document.createElement("li");
-    li.appendChild(document.createTextNode(event.data));
-    document.getElementById("messages").appendChild(li);
-  });
+        function connect(event) {
+            event.preventDefault(); // Prevent form submission
 
-  function send(event) {
-    const message = (new FormData(event.target)).get("message");
-    if (message) {
-      ws.send(message);
-    }
-    event.target.reset();
-    return false;
-  }
-</script>
+            const chatroom = document.getElementById("chatroom").value;
+            if (ws) {
+                ws.close(); // Close existing connection if present
+            }
 
-<div style="display: flex; height: 100%; flex-direction: column">
-  <ul id="messages" style="flex-grow: 1; list-style-type: none"></ul>
+            ws = new WebSocket(`ws://${location.host}/chat/${chatroom}`);
 
-  <form onsubmit="return send(event)">
-    <input type="text" name="message" minlength="1" />
-    <button type="submit">Send</button>
-  </form>
-</div>
+            ws.addEventListener('message', function (event) {
+                const li = document.createElement("li");
+                li.appendChild(document.createTextNode(event.data));
+                document.getElementById("messages").appendChild(li);
+            });
+
+            ws.addEventListener('open', function () {
+                console.log(`Connected to chatroom: ${chatroom}`);
+            });
+
+            ws.addEventListener('close', function () {
+                console.log(`Disconnected from chatroom: ${chatroom}`);
+            });
+
+            ws.addEventListener('error', function (error) {
+                console.error('WebSocket error:', error);
+            });
+        }
+
+        function send(event) {
+            const message = (new FormData(event.target)).get("message");
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(message);
+            }
+            event.target.reset(); // Reset the form after sending
+            return false;
+        }
+    </script>
+
+    <div style="display: flex; height: 100%; flex-direction: column">
+        <form onsubmit="connect(event)">
+            <label for="chatroom">Chatroom:</label>
+            <input type="text" id="chatroom" name="chatroom" required minlength="1" />
+            <button type="submit">Connect</button>
+        </form>
+        
+
+        <form onsubmit="return send(event)">
+            <input type="text" name="message" minlength="1" placeholder="Type your message" />
+            <button type="submit">Send</button>
+        </form>
+
+        <ul id="messages" style="flex-grow: 1; list-style-type: none"></ul>
+        
+    </div>
+</body>
+</html>
