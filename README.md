@@ -1,21 +1,110 @@
-# Tetris server
+# Messaging app built with microservices
 
-This is a server for [my Tetris](https://github.com/shunlog/racket-tetris) desktop game. 
-
-It aims to provide an online Tetris experience similar to [Jstris](https://jstris.jezevec10.com/) and [TETR.IO](https://tetr.io/). Two or more players start playing in a match and can see each other's field. They can send garbage lines to each other by clearing more lines at a time. As time passes, the difficulty increases and the pieces start falling faster. The player who lasts longer is the winner (or the one with a bigger score). The game replay is then saved and can be viewed by anyone online.
+This project implements a basic messaging app like IRC using a bunch of techniques and technologies:
+- Microservices
+- API Gateway with load balancing
+- Service discovery
+- Caching
+- Docker
+- Websockets
 
 # Usage
 
-Create the password files mentioned in `docker-compose.yml`:
-- `users/postgres-password.txt`
-- `chat/postgres-password.txt`
-
 Run:
 ```sh
-docker compose up --build
+docker compose up
 ```
 
-# Task timeout
+# Development
+
+During development, we want to rebuild the images in case some code changed (using `--build`)
+and turn on watch mode for the services that support it (using `--watch`):
+```sh
+docker compose up --build --watch
+```
+
+
+# Documentation
+
+## Application Suitability Assessment
+
+The question is whether it would be a good idea to use microservices for the messaging app I'm building.
+
+One way to look at it is that I'm simply extracting all the functionality related to users and authentication into a service (called `users`,
+while keeping all the main functionality in a separate service (called `chat`).
+The chat service uses websockets to receive and send messages to users.
+
+A very similar approach is used by  [lichess.com](https://github.com/lichess-org/lila), although for chess instead of chats:
+Lichess dedicates one service to handle the WebSocket connections for live games
+and uses another service to store the user and replay files.
+This way, the live games service can be scaled on multiple machines,
+while a single data service may suffice.
+Thus, the same approach for service boundaries should work well for my chat app.
+
+
+## Service boundaries
+
+![](services.png)
+
+The **Users service** should handle mainly everything related to authentication,
+such as registration, login and whatnot.
+It can also store user data, such as profile pictures and other information.
+This service should not be worried about messages in any way.
+
+The **Chat service** should handle all the logic of a messaging app: chat rooms (lobbies) and websockets.
+
+## Technology Stack and Communication Patterns
+
+The APIs will accept HTTP requests with JSON bodies (mis-termed REST).
+
+- Users service: Python + Postgres
+- Chat service: Python + Postgres
+- Gateway: Go
+- Service Discovery: Go
+
+## API Interfaces
+
+### Users service
+
+```
+POST /register (username, password)
+POST /login (username, password) -> token
+GET /verify (token) -> boolean
+POST /logout (token)
+```
+
+### Chat service
+
+```
+POST /room (username, password) -> websocket
+```
+
+The websocket is created for a specific chat room,
+and is used to send messages back and forth, like this:
+```
+< FROM <user_id> <message>
+> SEND <message>
+```
+
+### Gateway
+
+The gateway proxies requests of the form `/chat/...` to a chat service instance,
+and those of the form `/users/...` to a users service instance.
+
+An exception is the request `DELETE /users/<user_id>` 
+which will create a transaction with two parts:
+1. Delete all private chat rooms containing the user being deleted
+2. Delete the user
+
+## Deployment & Scaling
+
+All services, including Gateway, Service discovery, databases and Prometheus + Grafana 
+run inside Docker containers and are managed with Docker Compose.
+
+
+# Requirements
+
+## Task timeout
 
 Controlled by the `keep-alive` option on the ASGI server.
 The connection is closed after 3 seconds if no data is sent over.
@@ -24,7 +113,7 @@ Run this and wait:
 telnet localhost 8009
 ```
 
-# Concurrent task limit (rate limiting)
+## Concurrent task limit (rate limiting)
 
 Make 4 requests in less than 10 seconds, the 4th one will be rejected because of rate limiting:
 ```sh
@@ -35,14 +124,14 @@ curl http://localhost:8009/status
 ```
 
 
-# Chat service
+## Chat service
 
 ```
 http GET :8008/status
 http GET :8009/status
 ```
 
-# Users service
+## Users service
 
 ```
 http GET :8010/status
@@ -55,7 +144,7 @@ http -v -A bearer -a $token POST :8010/logout
 http -v -A bearer -a $token :8010/verify
 ```
 
-# Status
+## Status
 
 Service registry:
 ```
@@ -66,123 +155,4 @@ Gateway:
 ```
 http GET :5000/status
 ```
-
-
-# Docs
-
-## Application Suitability Assessment
-
-The idea of separating persistent data from live games into two different services is proven by [lichess.com](https://github.com/lichess-org/lila).
-Lichess dedicates one service to handle the WebSocket connections for live games
-and uses another service to store the user and replay files.
-This way, the live games service can be scaled on multiple machines,
-while a single data service may suffice.
-
-A chess server and a Tetris server share many features related to this separation of concerns:
-1. Both host live games which can have 2 players and many spectators
-2. Both need to save game replays and share them
-3. Both require authentication
-
-Thus, the same approach for service boundaries should work well for Tetris.
-
-Note the importance of scaling the live games service for the purpose of geographical distribution.
-Tetris is a fast-paced game, so the latency is critical.
-
-
-## Service boundaries
-
-![](services.png)
-
-The **Replays database service**'s main purpose is to allow users to view replays of past games, or even host replays of their offline games (think of record breaking). For this, some sort of authentication is also required, which is handled in this same service.
-
-Replays of online games might reference all the participants' profiles,
-and you can query all the games played by a user.
-It could also do rankings and statistics.
-
-The **Game hosting service** is meant only for hosting games (duh). 
-It creates the lobbies and lets users communicate with it via WebSockets.
-People can also spectate a game while it's live.
-
-This service does not have a persistent store.
-After a game is over, this service could automatically save the replay on the Replays service, or it could simply send the replay file to the users and let them do whatever they wish with it.
-
-This service might need to verify the identity of players (e.g. for private games, or to be able to save a replay automatically),
-in which case maybe JWT would be a solution (to avoid querying the other service).
-
-
-## Technology Stack and Communication Patterns
-
-The APIs will accept HTTP requests with JSON bodies (mis-termed REST).
-
-- **Replays database service**: Erlang + MongoDB
-- **Game hosting service**: Erlang + Redis
-- Gateway: Go
-
-## Data Management 
-
-### Replays database service
-
-#### Authentication
-
-- Sign up (login, password)
-- Sign in (login, password) -> token
-
-#### Replays
-
-- Save replay (file)
-- List replays (filter by date, players; sort by score, time)
-- Get replay -> file
-
-### Game hosting service
-
-- Create lobby -> lobby_id
-- List lobbies -> big list with lobby_id's and other data
-- Join lobby (lobby_id, token?) -> WebSocket
-
-Through the Websocket will be sent every action of the player (key presses and releases).
-When someone joins a lobby that's already running, he will first receive all the past events to reconstruct the game state, and then will receive updates as they happen.
-
-
-The user needs to send:
-- confirmation of game start, along with his local start timestamp
-- key presses and releases
-- heartbeats, to let the server know when a connection is lost
-
-Every message will have a timestamp, which will be relative to the first "starting" timestamp sent by each user.
-This makes sense because every user is playing his own game, so all the input events should be precise on his machine, which means they won't necessarily be synchronized.
-```
-0 start
-100 heartbeat
-200 heartbeat
-...
-1465 left press
-...
-2084 space press
-...
-2284 space release
-...
-3458 left release
-```
-
-The server needs to send each client:
-- the key events of their opponents
-- when an opponent gets disconnected or reconnects
-```
-1058 player0 left press
-...
-54848 player1 disconnected
-55211 player1 reconnected
-...
-
-```
-
-Since the game is deterministic, and the state can be recreated from the past events,
-there is no need to send information about cleared lines, game over or score;
-every client will recalculate their opponents' states from their inputs.
-
-
-## Deployment & Scaling
-
-Docker with Docker Compose.
-
 
