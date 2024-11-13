@@ -23,39 +23,39 @@ func (s Set) Add(element string) {
 	s[element] = struct{}{} // Use the element as a key in the map to simulate a set
 }
 
-type ServiceRegistry struct {
+type Registry struct {
 	pb.UnimplementedServiceRegistryServer
 	mu       sync.RWMutex   // Mutex for synchronizing access
 	services map[string]Set // service name -> set of addresses
 }
 
-func NewServiceRegistry() *ServiceRegistry {
-	return &ServiceRegistry{
+func NewRegistry() *Registry {
+	return &Registry{
 		services: make(map[string]Set),
 	}
 }
 
-// HealthCheckResponse defines the structure of the health check response.
-type HealthCheckResponse struct {
+// StatusResponse defines the structure of the health check response.
+type StatusResponse struct {
     Status        string   `json:"status"`
     Services      []string `json:"services"`
     ServicesCount int      `json:"services_count"`
 }
 
-// HealthCheckHandler returns the status and services in JSON format.
-func (sr *ServiceRegistry) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
-    sr.mu.RLock() // Acquire read lock
-    defer sr.mu.RUnlock() // Ensure the lock is released
+// StatusHandler returns the status and services in JSON format.
+func (reg *Registry) StatusHandler(w http.ResponseWriter, r *http.Request) {
+    reg.mu.RLock() // Acquire read lock
+    defer reg.mu.RUnlock() // Ensure the lock is released
 
     // Prepare the response
-    response := HealthCheckResponse{
+    response := StatusResponse{
         Status:        "Alive",
-        Services:      make([]string, 0, len(sr.services)),
+        Services:      make([]string, 0, len(reg.services)),
         ServicesCount: 0,
     }
 
     // Iterate over the services to populate the response
-    for serviceName, addresses := range sr.services {
+    for serviceName, addresses := range reg.services {
         response.Services = append(response.Services, serviceName)
         response.ServicesCount += len(addresses) // Add count of service instances
     }
@@ -68,31 +68,31 @@ func (sr *ServiceRegistry) HealthCheckHandler(w http.ResponseWriter, r *http.Req
 
 
 
-func (s *ServiceRegistry) AddService(serviceName, address string) {
-	s.mu.Lock()         // Lock for exclusive access
-	defer s.mu.Unlock() // Ensure the lock is released
+func (reg *Registry) AddService(serviceName, address string) {
+	reg.mu.Lock()         // Lock for exclusive access
+	defer reg.mu.Unlock() // Ensure the lock is released
 
-	if _, exists := s.services[serviceName]; !exists {
-		s.services[serviceName] = NewSet() // Create a new set for this service
+	if _, exists := reg.services[serviceName]; !exists {
+		reg.services[serviceName] = NewSet() // Create a new set for this service
 	}
-	s.services[serviceName].Add(address) // Add the address to the set
+	reg.services[serviceName].Add(address) // Add the address to the set
 }
 
-func (s *ServiceRegistry) RegisterService(ctx context.Context, info *pb.ServiceInfo) (*pb.RegisterResponse, error) {
-	s.AddService(info.ServiceName, info.Address)
+func (reg *Registry) RegisterService(ctx context.Context, info *pb.ServiceInfo) (*pb.RegisterResponse, error) {
+	reg.AddService(info.ServiceName, info.Address)
 	return &pb.RegisterResponse{Success: true}, nil
 }
 
-func (s *ServiceRegistry) GetServices(serviceName string) Set {
-	s.mu.RLock()         // Acquire a read lock
-	defer s.mu.RUnlock() // Ensure the lock is released
+func (reg *Registry) GetServices(serviceName string) Set {
+	reg.mu.RLock()         // Acquire a read lock
+	defer reg.mu.RUnlock() // Ensure the lock is released
 
-	return s.services[serviceName] // Return the set of addresses
+	return reg.services[serviceName] // Return the set of addresses
 }
 
-func (s *ServiceRegistry) GetServiceInstances(ctx context.Context, req *pb.ServiceQuery) (*pb.ServiceInstances, error) {
+func (reg *Registry) GetServiceInstances(ctx context.Context, req *pb.ServiceQuery) (*pb.ServiceInstances, error) {
 
-	addresses := s.GetServices(req.ServiceName)
+	addresses := reg.GetServices(req.ServiceName)
 	instances := &pb.ServiceInstances{
 		Instances: make([]*pb.ServiceInfo, 0), // Initialize the slice for ServiceInfo
 	}
@@ -115,11 +115,11 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	registry := NewServiceRegistry()                       // Initialize the ServiceRegistry instance
-	pb.RegisterServiceRegistryServer(grpcServer, registry) // Use the initialized instance
+	reg := NewRegistry()                       // Initialize the ServiceRegistry instance
+	pb.RegisterServiceRegistryServer(grpcServer, reg) // Use the initialized instance
 
     // Set up the HTTP server and routes
-    http.HandleFunc("/status", registry.HealthCheckHandler)
+    http.HandleFunc("/status", reg.StatusHandler)
     go http.ListenAndServe(":8080", nil)
 
 	

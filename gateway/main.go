@@ -11,7 +11,7 @@ import (
     "strings"
     "time"
 
-		"google.golang.org/grpc"
+	"google.golang.org/grpc"
     pb "gateway/registry"  // Update with actual path to generated proto
 )
 
@@ -178,5 +178,5 @@ func main() {
 	log.Println("Starting HTTP server on port 5000...")
 	log.Fatal(http.ListenAndServe(":5000", nil))
 
-		
+	
 }
