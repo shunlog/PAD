@@ -12,11 +12,11 @@ import (
     "time"
 
 	"google.golang.org/grpc"
-    pb "gateway/registry"  // Update with actual path to generated proto
+    pb "gateway/registry"
 )
 
 const (
-    registryAddress = "service-registry:50051" // Address of your Registry service
+    registryAddress = "service-registry:50051"
 )
 var (
     // Cache to store last call timestamps for service queries
