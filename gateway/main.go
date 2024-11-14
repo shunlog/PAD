@@ -20,6 +20,7 @@ import (
 const (
     registryAddress = "service-registry:50051"
 )
+
 var (
     // Cache to store last call timestamps for service queries
     serviceCache = make(map[string]cachedServiceInfo)
@@ -156,11 +157,6 @@ func proxyToInstance(instance *pb.ServiceInfo, endpointPath string, w http.Respo
 		return errors.New("Failed to reach service instance")
 	}
 	defer resp.Body.Close()
-
-	// Raise error if 5** status
-	if resp.Status[0] == '5' {
-		return errors.New("Service instance returned 500.")
-	}
 	
 	// Copy the response back to the original client
 	body, err := ioutil.ReadAll(resp.Body)

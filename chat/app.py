@@ -58,10 +58,13 @@ async def view_error():
     return Response("Simulating error", status=500)
 
 
-@app.get("/sleep")
-async def view_sleep():
-    await asyncio.sleep(1)
-    return Response("Slept for a second")
+@app.get("/sleep/<duration>")
+async def view_sleep(duration):
+    '''Sleep for a given number of ms.
+    Useful for testing timeouts.'''
+    duration = int(duration)
+    await asyncio.sleep(duration / 1000)
+    return Response(f"Slept for {duration}ms.")
 
 
 # Store connected clients by chatroom
