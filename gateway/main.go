@@ -113,37 +113,45 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
             return
         }
 
-        // Proxy the request to the selected service instance
-        proxyURL := fmt.Sprintf("http://%s%s", instance.Address, endpointPath)
-        proxyReq, err := http.NewRequest(r.Method, proxyURL, r.Body)
-        if err != nil {
-            http.Error(w, "Failed to create proxy request", http.StatusInternalServerError)
-            return
-        }
-
-        // Forward the headers from the original request
-        proxyReq.Header = r.Header
-
-        // Perform the request
-        client := &http.Client{}
-        resp, err := client.Do(proxyReq)
-        if err != nil {
-            http.Error(w, "Failed to reach service instance", http.StatusBadGateway)
-            return
-        }
-        defer resp.Body.Close()
-
-        // Copy the response back to the original client
-        body, err := ioutil.ReadAll(resp.Body)
-        if err != nil {
-            http.Error(w, "Failed to read response body", http.StatusInternalServerError)
-            return
-        }
-
-        w.WriteHeader(resp.StatusCode)
-        w.Write(body)
-    }
+		proxyToInstance(instance, endpointPath, w, r)
+	}
 }
+
+func proxyToInstance(instance *pb.ServiceInfo, endpointPath string, w http.ResponseWriter, r *http.Request){
+	
+	// Proxy the request to the selected service instance
+	proxyURL := fmt.Sprintf("http://%s%s", instance.Address, endpointPath)
+	proxyReq, err := http.NewRequest(r.Method, proxyURL, r.Body)
+	if err != nil {
+		http.Error(w, "Failed to create proxy request", http.StatusInternalServerError)
+		return
+	}
+
+	// Forward the headers from the original request
+	proxyReq.Header = r.Header
+
+	// Perform the request
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		http.Error(w, "Failed to reach service instance", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Retry if 500 http error
+	
+	// Copy the response back to the original client
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(resp.StatusCode)
+	w.Write(body)
+}
+
 
 type HealthCheckResponse struct {
     Status        string   `json:"status"`
