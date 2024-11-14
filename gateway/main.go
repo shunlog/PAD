@@ -1,18 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-    "sync"
-    "context"
-    "fmt"
-    "io/ioutil"
-    "log"
-    "net/http"
-    "strings"
-    "time"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	pb "gateway/registry"
 
 	"google.golang.org/grpc"
-    pb "gateway/registry"
 )
 
 const (
@@ -106,50 +108,69 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
             return
         }
 
-        // Select an instance to forward the request to
-        instance := selectServiceInstance(instances)
-        if instance == nil {
-            http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
-            return
-        }
+		const N_RETRIES = 2
+		const N_INSTANCES_TRIED = 2
+		
+		for inst_cnt := 0; inst_cnt < N_INSTANCES_TRIED; inst_cnt++ {
+			// Select an instance to forward the request to
+			instance := selectServiceInstance(instances)
+			if instance == nil {
+				http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
+				return
+			}
 
-		proxyToInstance(instance, endpointPath, w, r)
+			for i := 0; i < N_RETRIES; i++ {
+				err := proxyToInstance(instance, endpointPath, w, r)
+				if err == nil {
+					// Proxied successfully
+					return
+				}
+			}
+
+		}
+		
+		// Couldn't proxy N times to M instances 
+		http.Error(w, "Failed to reach service instance", 500)
+
 	}
 }
 
-func proxyToInstance(instance *pb.ServiceInfo, endpointPath string, w http.ResponseWriter, r *http.Request){
+func proxyToInstance(instance *pb.ServiceInfo, endpointPath string, w http.ResponseWriter, r *http.Request) error {
 	
 	// Proxy the request to the selected service instance
 	proxyURL := fmt.Sprintf("http://%s%s", instance.Address, endpointPath)
 	proxyReq, err := http.NewRequest(r.Method, proxyURL, r.Body)
 	if err != nil {
-		http.Error(w, "Failed to create proxy request", http.StatusInternalServerError)
-		return
+		return errors.New("Failed to create proxy request")
 	}
 
 	// Forward the headers from the original request
 	proxyReq.Header = r.Header
 
 	// Perform the request
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 500 * time.Millisecond,
+	}
 	resp, err := client.Do(proxyReq)
 	if err != nil {
-		http.Error(w, "Failed to reach service instance", http.StatusBadGateway)
-		return
+		return errors.New("Failed to reach service instance")
 	}
 	defer resp.Body.Close()
 
-	// Retry if 500 http error
+	// Raise error if 5** status
+	if resp.Status[0] == '5' {
+		return errors.New("Service instance returned 500.")
+	}
 	
 	// Copy the response back to the original client
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
-		return
+		return errors.New("Failed to read response body")
 	}
 
 	w.WriteHeader(resp.StatusCode)
 	w.Write(body)
+	return nil
 }
 
 

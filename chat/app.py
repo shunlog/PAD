@@ -4,7 +4,7 @@ import os
 import traceback
 
 import grpc
-from quart import Quart, render_template, websocket, jsonify
+from quart import Quart, render_template, websocket, jsonify, Response
 from quart_rate_limiter import RateLimiter, RateLimit
 import psycopg
 
@@ -51,6 +51,17 @@ async def status_view():
 @app.get("/")
 async def index():
     return await render_template("index.html", hostname=hostname, port=port)
+
+
+@app.get("/error")
+async def view_error():
+    return Response("Simulating error", status=500)
+
+
+@app.get("/sleep")
+async def view_sleep():
+    await asyncio.sleep(1)
+    return Response("Slept for a second")
 
 
 # Store connected clients by chatroom
