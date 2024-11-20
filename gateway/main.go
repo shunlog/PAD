@@ -22,21 +22,26 @@ const (
 	// Circuit breaker
 	N_RETRIES = 2  // Number of retries before circuit-breaking an instance
 	N_INSTANCES_TRIED = 2  // number of instances failed before returning error
+
+	// Cooldown period for querying the service registry
+	cooldownPeriod = time.Second * 10
+	// Cooldown period after blocking an instance
+	blockedPeriod = time.Second * 20
 )
 
 var (
     // Cache to store last call timestamps for service queries
     serviceCache = make(map[string]cachedServiceInfo)
     mu           sync.Mutex // Mutex to protect access to the cache
+
+	blocked = make(map[*pb.ServiceInfo]time.Time)
+	blocked_mu  sync.Mutex // Mutex for `blocked` map
 )
 
 type cachedServiceInfo struct {
     instances []*pb.ServiceInfo
     lastCall  time.Time
 }
-
-// Cooldown period for querying the service registry
-const cooldownPeriod = time.Second * 10
 
 // Function to query the registry for service instances and return them
 func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) []*pb.ServiceInfo {
@@ -46,7 +51,7 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
 
     // Check if the cached value is still valid
     if exists && time.Since(cachedInfo.lastCall) < cooldownPeriod {
-		log.Printf("Returning cached instances for %s\n", serviceName)
+		log.Printf("cache: using cached instances for %s, %v seconds haven't passed yet\n", serviceName, cooldownPeriod)
         return cachedInfo.instances // Return cached instances
     }
 
@@ -82,13 +87,38 @@ func selectServiceInstance(instances []*pb.ServiceInfo) *pb.ServiceInfo {
         return nil
     }
 
-    // Select the instance at the current index
-    selectedInstance := instances[roundRobinIndex]
+	// unblock instances if time has passed
+	blocked_mu.Lock()
+	for inst, t := range blocked {
+        if time.Since(t) > blockedPeriod {
+            delete(blocked, inst)
+        }
+    }
+	blocked_mu.Unlock()
+	
+	// select next non-blocked instance
+	for range len(instances){
+		selectedInstance := instances[roundRobinIndex]
+		roundRobinIndex = (roundRobinIndex + 1) % len(instances)
+		log.Println("Round robin: %v/n", roundRobinIndex)
 
-    // Move to the next index, wrapping around if necessary
-    roundRobinIndex = (roundRobinIndex + 1) % len(instances)
+		// Check if instance is not blocked
+		is_blocked := false
+		blocked_mu.Lock()
+		for inst := range blocked {
+			if inst == selectedInstance {
+				is_blocked = true
+			}
+		}
+		blocked_mu.Unlock()
+		if !is_blocked {
+			return selectedInstance
+		}
+		// Selected instance is bocked, try next
+	}
 
-    return selectedInstance
+	// All instances are blocked
+	return nil
 }
 
 
@@ -106,21 +136,18 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
         endpointPath := "/" + pathParts[2] // The rest is the actual endpoint
 
         // Query the service registry for available instances
-        instances := queryServiceInstances(client, serviceName)
-        if len(instances) == 0 {
-            http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
-            return
-        }
-		
-		for inst_cnt := 0; inst_cnt < N_INSTANCES_TRIED; inst_cnt++ {
+        instances := queryServiceInstances(client, serviceName)		
+		for range N_INSTANCES_TRIED {
+			
 			// Select an instance to forward the request to
 			instance := selectServiceInstance(instances)
 			if instance == nil {
-				http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
+				http.Error(w, "Failed to reach service instance", 500)
+				log.Printf("No instances available for service %s\n", serviceName)
 				return
 			}
-
-			for i := 0; i < N_RETRIES; i++ {
+			
+			for range N_RETRIES {
 				err := proxyToInstance(instance, endpointPath, w, r)
 				if err == nil {
 					// Proxied successfully
@@ -128,11 +155,15 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
 				}
 			}
 
+			// All requests to instnce failed, block it temporarily
+			blocked_mu.Lock()
+			blocked[instance] = time.Now()
+			blocked_mu.Unlock()
+			log.Printf("Instance %s failed %v times, blocking it", instance, N_RETRIES)
 		}
 		
 		// Couldn't proxy N times to M instances 
 		http.Error(w, "Failed to reach service instance", 500)
-
 	}
 }
 
