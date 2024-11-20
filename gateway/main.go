@@ -19,6 +19,9 @@ import (
 
 const (
     registryAddress = "service-registry:50051"
+	// Circuit breaker
+	N_RETRIES = 2  // Number of retries before circuit-breaking an instance
+	N_INSTANCES_TRIED = 2  // number of instances failed before returning error
 )
 
 var (
@@ -43,7 +46,7 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
 
     // Check if the cached value is still valid
     if exists && time.Since(cachedInfo.lastCall) < cooldownPeriod {
-		fmt.Printf("Returning cached instances for %s\n", serviceName)
+		log.Printf("Returning cached instances for %s\n", serviceName)
         return cachedInfo.instances // Return cached instances
     }
 
@@ -108,9 +111,6 @@ func proxyHandler(client pb.ServiceRegistryClient) http.HandlerFunc {
             http.Error(w, fmt.Sprintf("No instances available for service %s", serviceName), http.StatusServiceUnavailable)
             return
         }
-
-		const N_RETRIES = 2
-		const N_INSTANCES_TRIED = 2
 		
 		for inst_cnt := 0; inst_cnt < N_INSTANCES_TRIED; inst_cnt++ {
 			// Select an instance to forward the request to
@@ -184,6 +184,7 @@ func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 
 func main() {
+	log.Println("Connecting to Registry gRPC server on port 50051...")
     // Connect to the gRPC server
     conn, err := grpc.Dial(registryAddress, grpc.WithInsecure(), grpc.WithBlock())
     if err != nil {
