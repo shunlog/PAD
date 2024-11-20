@@ -35,7 +35,14 @@ func (reg *Registry) AddService(serviceName, address string) {
 		// reserve a realistic capacity for the array to avoid too many reallocations
 		reg.services[serviceName] = make([]string, 0, 8)
 	}
-			
+
+	for _, addr := range reg.services[serviceName] {
+		if addr == address {
+			// Address already exists
+			return
+		}
+	}
+	// New address, append it
 	reg.services[serviceName] = append(reg.services[serviceName], address)
 }
 
