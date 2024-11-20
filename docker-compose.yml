@@ -47,7 +47,8 @@ services:
     # command: quart run --port 8008 --host 0.0.0.0
     command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
     ports:
-      - 8008:8008
+      - 8008:8008  # http
+      - 8090:8090  # prometheus
     depends_on:
       service-registry:
         condition: service_started

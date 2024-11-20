@@ -2,11 +2,13 @@ import asyncio
 from datetime import timedelta
 import os
 import traceback
+import functools
 
 import grpc
 from quart import Quart, render_template, websocket, jsonify, Response
 from quart_rate_limiter import RateLimiter, RateLimit
 import psycopg
+from prometheus_client import generate_latest, Counter, CONTENT_TYPE_LATEST
 
 import registry_pb2
 import registry_pb2_grpc
@@ -28,6 +30,23 @@ rate_limiter = RateLimiter(app, default_limits=[
 ])
 
 
+# Prometheus counter
+req_counter = Counter('request_count', 'Number of HTTP requests handled')
+
+
+def inc_counter(counter):
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            print("Incrementing", counter)
+            counter.inc()
+            # Call the original async function
+            result = await func(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
+
+
 async def _init_db():
     sql_file = app.root_path + "/schema.sql"
     conn = await get_db()
@@ -44,27 +63,37 @@ def cli_init_db():
 
 
 @app.route('/status')
+@inc_counter(req_counter)
 async def status_view():
     return jsonify({"status": "Alive"})
 
 
 @app.get("/")
+@inc_counter(req_counter)
 async def index():
     return await render_template("index.html", hostname=hostname, port=port)
 
 
 @app.get("/error")
+@inc_counter(req_counter)
 async def view_error():
     return Response("Simulating error", status=500)
 
 
 @app.get("/sleep/<duration>")
+@inc_counter(req_counter)
 async def view_sleep(duration):
     '''Sleep for a given number of ms.
     Useful for testing timeouts.'''
     duration = int(duration)
     await asyncio.sleep(duration / 1000)
     return Response(f"Slept for {duration}ms.")
+
+
+# Prometheus endpoint
+@app.route('/metrics')
+async def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 
 # Store connected clients by chatroom
