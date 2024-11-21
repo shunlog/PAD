@@ -8,6 +8,13 @@ This project implements a basic messaging app like IRC using a bunch of techniqu
 - Docker
 - Websockets
 
+# Screenshots
+
+Dashboard using Grafana, with Prometheus collecting metrics:
+
+![](metrics.png)
+
+
 # Usage
 
 Run:
@@ -102,62 +109,3 @@ All services, including Gateway, Service discovery, databases and Prometheus + G
 run inside Docker containers and are managed with Docker Compose.
 
 
-# Requirements
-
-## Task timeout
-
-Controlled by the `keep-alive` option on the ASGI server.
-The connection is closed after 3 seconds if no data is sent over.
-Run this and wait:
-```sh
-telnet localhost 8009
-```
-
-## Concurrent task limit (rate limiting)
-
-Make 4 requests in less than 10 seconds, the 4th one will be rejected because of rate limiting:
-```sh
-curl http://localhost:8009/status
-curl http://localhost:8009/status
-curl http://localhost:8009/status
-curl http://localhost:8009/status
-```
-
-
-## Chat service
-
-```
-http GET :8008/status
-http GET :8009/status
-```
-
-## Users service
-
-```
-http GET :8010/status
-
-http POST :8010/register username=admin password=root
-http -v POST :8010/login username=admin password=root
-token=
-http -v -A bearer -a $token :8010/verify
-http -v -A bearer -a $token POST :8010/logout
-http -v -A bearer -a $token :8010/verify
-```
-
-## Status
-
-Service registry:
-```
-http GET :8080/status
-```
-
-Gateway:
-```
-http GET :5000/status
-```
-
-# Screenshots
-
-Dashboard using Grafana, with Prometheus collecting metrics:
-
-![](metrics.png)
