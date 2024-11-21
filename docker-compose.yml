@@ -79,7 +79,7 @@ services:
     environment:
       - HOSTNAME=chat-2
       - SERVICE_NAME=chat
-      - PORT=8009
+      - PORT=8008
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
@@ -87,10 +87,10 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_DB=chat
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-chat-password
-    # command: quart run --port 8009 --host 0.0.0.0
-    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8009 --access-logfile -
+    # command: quart run --port 8008 --host 0.0.0.0
+    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
     ports:
-      - 8009:8009
+      - 8009:8008
     depends_on:
       service-registry:
         condition: service_started
@@ -137,7 +137,7 @@ services:
     environment:
       - HOSTNAME=users-1
       - SERVICE_NAME=users
-      - PORT=8009
+      - PORT=8008
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
@@ -145,12 +145,40 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_DB=users
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
-    # command: quart --debug run --port 8008 --host 0.0.0.0
-    # Task timeout = keep-alive
     command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
     depends_on:
       # service-registry:
       #   condition: service_started
+      postgres-users:
+        condition: service_healthy       
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./users
+          target: /app
+
+
+  users-2:
+    build:
+      context: .
+      dockerfile: Dockerfile-users
+    ports:
+      - 8011:8008
+    secrets:
+      - postgres-users-password
+    environment:
+      - HOSTNAME=users-1
+      - SERVICE_NAME=users
+      - PORT=8008
+      - QUART_APP=app:app
+      - QUART_BODY_TIMEOUT=5
+      - QUART_RESPONSE_TIMEOUT=5
+      - POSTGRES_SERVER=postgres-users
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=users
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-users-password
+    command: python3 -m hypercorn --keep-alive 3 app:app -b 0.0.0.0:8008 --access-logfile -
+    depends_on:
       postgres-users:
         condition: service_healthy       
     develop:
