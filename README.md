@@ -156,3 +156,8 @@ Gateway:
 http GET :5000/status
 ```
 
+# Screenshots
+
+Dashboard using Grafana, with Prometheus collecting metrics:
+
+![](metrics.png)

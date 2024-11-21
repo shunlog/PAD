@@ -2,7 +2,6 @@ import asyncio
 from datetime import timedelta
 import os
 import traceback
-import functools
 
 import grpc
 from quart import Quart, render_template, websocket, jsonify, Response
@@ -13,6 +12,7 @@ from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LA
 import registry_pb2
 import registry_pb2_grpc
 from db import get_db
+from prometheus_utils import inc_counter
 
 
 # Service discovery
@@ -33,20 +33,7 @@ rate_limiter = RateLimiter(app, default_limits=[
 
 # Prometheus counter
 req_counter = Counter('request_count', 'Number of HTTP requests handled')
-req_time = Summary('request_latency_seconds', 'Description of summary')
-
-
-def inc_counter(counter):
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            print("Incrementing", counter)
-            counter.inc()
-            # Call the original async function
-            result = await func(*args, **kwargs)
-            return result
-        return wrapper
-    return decorator
+req_time = Summary('request_latency_seconds', 'Request latency')
 
 
 async def _init_db():
@@ -62,6 +49,12 @@ async def _init_db():
 def cli_init_db():
     click.echo('Recreating database tables.')
     asyncio.get_event_loop().run_until_complete(_init_db())
+
+
+# Prometheus endpoint
+@app.route('/metrics')
+async def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 
 @app.route('/status')
@@ -94,12 +87,6 @@ async def view_sleep(duration):
     duration = int(duration)
     await asyncio.sleep(duration / 1000)
     return Response(f"Slept for {duration}ms.")
-
-
-# Prometheus endpoint
-@app.route('/metrics')
-async def metrics():
-    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 
 # Store connected clients by chatroom

@@ -7,10 +7,12 @@ import grpc
 import click
 from quart import Quart, request, jsonify
 from quart_rate_limiter import RateLimiter, RateLimit
+from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LATEST
 
 import registry_pb2
 import registry_pb2_grpc
 from db import get_db
+from prometheus_utils import inc_counter
 
 from auth import register, create_session, logout, verify_token
 
@@ -33,6 +35,11 @@ rate_limiter = RateLimiter(app, default_limits=[
 ])
 
 
+# Prometheus counter
+req_counter = Counter('request_count', 'Number of HTTP requests handled')
+req_time = Summary('request_latency_seconds', 'Request latency')
+
+
 async def _init_db():
     sql_file = app.root_path + "/schema.sql"
     conn = await get_db()
@@ -48,12 +55,22 @@ def cli_init_db():
     asyncio.get_event_loop().run_until_complete(_init_db())
 
 
+# Prometheus endpoint
+@app.route('/metrics')
+async def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+
 @app.route('/status')
+@inc_counter(req_counter)
+@req_time.time()
 async def status_view():
     return jsonify({"status": "Alive"})
 
 
 @app.route('/register', methods=['POST'])
+@inc_counter(req_counter)
+@req_time.time()
 async def register_view():
     data = await request.get_json()
     username = data['username']
@@ -68,6 +85,8 @@ async def register_view():
 
 
 @app.route('/login', methods=['POST'])
+@inc_counter(req_counter)
+@req_time.time()
 async def login():
     data = await request.get_json()
     username = data['username']
@@ -82,6 +101,8 @@ async def login():
 
 
 @app.route('/logout', methods=['POST'])
+@inc_counter(req_counter)
+@req_time.time()
 async def logout_view():
     token = request.headers.get('Authorization').split()[1]
     await logout(token)
@@ -89,6 +110,8 @@ async def logout_view():
 
 
 @app.route('/verify', methods=['GET'])
+@inc_counter(req_counter)
+@req_time.time()
 async def verify_view():
     token = request.headers.get('Authorization').split()[1]
 
