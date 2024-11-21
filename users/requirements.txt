@@ -1,3 +1,5 @@
 quart
 quart-rate-limiter
+grpcio-tools
 psycopg[binary]
+prometheus-client

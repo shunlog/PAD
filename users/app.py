@@ -1,12 +1,24 @@
 import asyncio
 from datetime import timedelta
+import os
+import traceback
 
+import grpc
 import click
 from quart import Quart, request, jsonify
 from quart_rate_limiter import RateLimiter, RateLimit
 
+import registry_pb2
+import registry_pb2_grpc
 from db import get_db
+
 from auth import register, create_session, logout, verify_token
+
+
+# Service discovery
+hostname = os.getenv('HOSTNAME', '0.0.0.0')
+service_name = os.getenv('SERVICE_NAME')
+port = int(os.getenv('PORT', 5000))
 
 
 app = Quart(__name__)
@@ -87,11 +99,63 @@ async def verify_view():
     return jsonify({"message": "Token is valid"}), 200
 
 
+async def register_service(service_name, address):
+
+    async def send_info():
+        with grpc.insecure_channel('service-registry:50051') as channel:
+            registry_stub = registry_pb2_grpc.ServiceRegistryStub(channel)
+
+            # Create the service info object
+            service_info = registry_pb2.ServiceInfo(
+                service_name=service_name,
+                address=address
+            )
+
+            # Register the service with the registry
+            try:
+                response = registry_stub.RegisterService(service_info)
+                if response.success:
+                    print(f"Registered {service_name}")
+                else:
+                    print(f"Failed register")
+            except grpc.RpcError as e:
+                print(f"RPC error: {e}")
+
+    while True:
+        try:
+            await send_info()
+        except RuntimeError as e:
+            print(e)
+        await asyncio.sleep(15)
+
+
+def task_done_callback(task):
+    try:
+        task.result()  # This will raise any exceptions that happened in the task
+    except Exception as e:
+        print(f"Error in async task: {e}")
+        # Print the full traceback
+        traceback.print_exc()
+
+
+@app.before_serving
+async def startup_RPC_task():
+    loop = asyncio.get_event_loop()
+    app.register_task = loop.create_task(register_service(
+        service_name, f"{hostname}:{port}"))
+
+    app.register_task.add_done_callback(task_done_callback)
+    print("Registered RPC task")
+
+
+@app.after_serving
+async def shutdown_RPC_task():
+    app.register_task.cancel()
+    print("Shut down RPC task")
+
+
 @app.before_serving
 async def startup():
     # either init db from here,
     # or for persistency call this func from CLI
     await _init_db()
-
-if __name__ == "__main__":
-    app.run()

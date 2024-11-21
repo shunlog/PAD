@@ -167,7 +167,7 @@ services:
     secrets:
       - postgres-users-password
     environment:
-      - HOSTNAME=users-1
+      - HOSTNAME=users-2
       - SERVICE_NAME=users
       - PORT=8008
       - QUART_APP=app:app

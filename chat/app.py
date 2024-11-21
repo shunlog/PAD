@@ -15,6 +15,7 @@ import registry_pb2_grpc
 from db import get_db
 
 
+# Service discovery
 hostname = os.getenv('HOSTNAME', '0.0.0.0')
 service_name = os.getenv('SERVICE_NAME')
 port = int(os.getenv('PORT', 5000))
@@ -210,7 +211,6 @@ def task_done_callback(task):
 
 @app.before_serving
 async def startup_RPC_task():
-
     loop = asyncio.get_event_loop()
     app.register_task = loop.create_task(register_service(
         service_name, f"{hostname}:{port}"))
