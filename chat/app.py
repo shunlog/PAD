@@ -3,8 +3,10 @@ from datetime import timedelta
 import os
 import traceback
 
+import httpx
 import grpc
-from quart import Quart, render_template, websocket, jsonify, Response
+from quart import (Quart, render_template, websocket, jsonify, Response, request,
+                   url_for, redirect)
 from quart_rate_limiter import RateLimiter, RateLimit
 import psycopg
 from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LATEST
@@ -19,6 +21,8 @@ from prometheus_utils import inc_counter
 hostname = os.getenv('HOSTNAME', '0.0.0.0')
 service_name = os.getenv('SERVICE_NAME')
 port = int(os.getenv('PORT', 5000))
+# TODO de-hardcode
+gateway_addr = 'gateway:5000'
 
 
 app = Quart(__name__)
@@ -64,11 +68,59 @@ async def status_view():
     return jsonify({"status": "Alive"})
 
 
+async def get_users_list():
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        await cur.execute('SELECT username FROM users')
+        rows = await cur.fetchall()
+    return [row[0] for row in rows]
+
+
 @app.get("/")
 @inc_counter(req_counter)
 @req_time.time()
 async def index():
-    return await render_template("index.html", hostname=hostname, port=port)
+    return await render_template("index.html", hostname=hostname, port=port,
+                                 login_url=f'http://127.0.0.1:{port}/login',
+                                 users=await get_users_list())
+
+
+async def verify_user(username, password):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f'http://{gateway_addr}/users/login',
+                                     json={'username': username, 'password': password})
+    if response.status_code != httpx.codes.OK:
+        return False
+
+    return True
+
+
+async def add_user_to_chatroom(username):
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        try:
+            await cur.execute(
+                'INSERT INTO users (username) VALUES (%s)', (username,)
+            )
+            await conn.commit()
+
+        except psycopg.errors.UniqueViolation:
+            raise ValueError("Username exists")
+
+
+@app.route('/login', methods=['POST'])
+async def login():
+    form_data = await request.form
+    username = form_data.get('username')
+    password = form_data.get('password')
+    print(username, password)
+    valid = await verify_user(username, password)
+    if not valid:
+        return Response("Invalid credentials", status=401)
+
+    await add_user_to_chatroom(username)
+
+    return redirect(request.referrer or url_for('login'))
 
 
 @app.get("/error")

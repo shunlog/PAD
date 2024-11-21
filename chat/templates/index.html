@@ -48,6 +48,23 @@
     </script>
 
     <div style="display: flex; height: 100%; flex-direction: column">
+
+      <ul>
+        {% for item in users %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+      
+      <form action="{{ login_url }}" method="POST">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+
+        <button type="submit">Submit</button>
+      </form>
+
         <form onsubmit="connect(event)">
             <label for="chatroom">Chatroom:</label>
             <input type="text" id="chatroom" name="chatroom" required minlength="1" />

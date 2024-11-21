@@ -1,4 +1,11 @@
-DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS users, messages;
+
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL
+);
+
 
 CREATE TABLE messages (
     id SERIAL PRIMARY KEY,
