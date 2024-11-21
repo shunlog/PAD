@@ -9,6 +9,15 @@ services:
         source: prometheus/prometheus.yml
         target: /etc/prometheus/prometheus.yml
 
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
   gateway:
     build:
       context: ./gateway
@@ -176,7 +185,9 @@ services:
 volumes:
   db-postgres-users:
   db-postgres-chat:
-  
+  grafana-storage: {}
+
+
 secrets:
   postgres-users-password:
     file: users/postgres-password.txt
