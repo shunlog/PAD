@@ -8,7 +8,7 @@ import grpc
 from quart import Quart, render_template, websocket, jsonify, Response
 from quart_rate_limiter import RateLimiter, RateLimit
 import psycopg
-from prometheus_client import generate_latest, Counter, CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LATEST
 
 import registry_pb2
 import registry_pb2_grpc
@@ -32,6 +32,7 @@ rate_limiter = RateLimiter(app, default_limits=[
 
 # Prometheus counter
 req_counter = Counter('request_count', 'Number of HTTP requests handled')
+req_time = Summary('request_latency_seconds', 'Description of summary')
 
 
 def inc_counter(counter):
@@ -64,24 +65,28 @@ def cli_init_db():
 
 @app.route('/status')
 @inc_counter(req_counter)
+@req_time.time()
 async def status_view():
     return jsonify({"status": "Alive"})
 
 
 @app.get("/")
 @inc_counter(req_counter)
+@req_time.time()
 async def index():
     return await render_template("index.html", hostname=hostname, port=port)
 
 
 @app.get("/error")
 @inc_counter(req_counter)
+@req_time.time()
 async def view_error():
     return Response("Simulating error", status=500)
 
 
 @app.get("/sleep/<duration>")
 @inc_counter(req_counter)
+@req_time.time()
 async def view_sleep(duration):
     '''Sleep for a given number of ms.
     Useful for testing timeouts.'''

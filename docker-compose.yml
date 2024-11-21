@@ -59,6 +59,7 @@ services:
         - action: sync+restart
           path: ./chat
           target: /app
+    restart: unless-stopped
 
   chat-2:
     build:
