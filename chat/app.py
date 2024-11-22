@@ -18,7 +18,7 @@ from db import get_db
 from prometheus_utils import inc_counter
 
 # seconds, after which the transaction is aborted
-PREPARE_PHASE_REQUEST_TIMEOUT = 10.0
+PREPARE_PHASE_REQUEST_TIMEOUT = 3.0
 
 # Service discovery
 hostname = os.getenv('HOSTNAME', '0.0.0.0')
@@ -150,10 +150,13 @@ async def delete_user_2PC(username, fail_on_prepare):
     # Prepare phase
     transaction_id = str(uuid.uuid4())
     async with httpx.AsyncClient() as client:
-        response = await client.post(f'http://{gateway_addr}/users/delete/prepare',
-                                     json={'transaction_id': transaction_id,
-                                           'username': username},
-                                     timeout=PREPARE_PHASE_REQUEST_TIMEOUT)
+        response = await client.post(
+            f'http://{gateway_addr}/users/delete/prepare',
+            json={'transaction_id': transaction_id,
+                  'username': username,
+                  'fail_on_prepare': fail_on_prepare},
+            timeout=PREPARE_PHASE_REQUEST_TIMEOUT)
+
     if response.status_code != httpx.codes.OK:
         return False
     # Pretend I sent a prepare request to this node as well
@@ -182,7 +185,7 @@ async def delete_view():
     fail_on_prepare = bool(form_data.get('fail_on_prepare'))
     ok = await delete_user_2PC(username, fail_on_prepare)
     if not ok:
-        return Response("Couldn't delete user", status=400)
+        return Response("Couldn't delete user", status=500)
 
     return redirect(request.referrer or url_for('/'))
 

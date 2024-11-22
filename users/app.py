@@ -55,11 +55,53 @@ def cli_init_db():
     asyncio.get_event_loop().run_until_complete(_init_db())
 
 
+async def WAL_store(transaction_id, query):
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        try:
+            await cur.execute(
+                "INSERT INTO WAL (transaction_id, query)\
+                VALUES (%s, %s)", (transaction_id, query)
+            )
+            await conn.commit()
+        except Exception as e:
+            print(e)
+
+    print(f'Stored query: {query}')
+
+
+async def WAL_restore(transaction_id):
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        q = 'SELECT query FROM WAL WHERE transaction_id=%s'
+        await cur.execute(q, (transaction_id,))
+        query = (await cur.fetchone())[0]
+    print(f'Restoring query: {query}')
+
+    return query
+
+
 @app.route('/delete/prepare', methods=['POST'])
 async def delete_prepare_view():
     data = await request.get_json()
     transaction_id = data['transaction_id']
     username = data['username']
+    fail_on_prepare = data['fail_on_prepare']
+
+    if fail_on_prepare:
+        await asyncio.sleep(5 * 1000)
+
+    # TODO Need ClientCursor for mogrify
+    # conn = await get_db()
+    # async with conn.cursor() as cur:
+    #     query = cur.mogrify('DELETE ', (username,)).decode("utf-8")
+    query = f'DELETE FROM users WHERE username = \'{username}\''
+
+    try:
+        await WAL_store(transaction_id, query)
+    except:
+        return Response("Couldn't prepare", status=500)
+
     print(f'Transaction {transaction_id}: PREPARED (delete user {username})')
     return "Prepared"
 
@@ -68,7 +110,14 @@ async def delete_prepare_view():
 async def delete_commit_view():
     data = await request.get_json()
     transaction_id = data['transaction_id']
-    print(f'Transaction {transaction_id}: COMMITED')
+
+    query = await WAL_restore(transaction_id)
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        await cur.execute(query)
+    await conn.commit()
+
+    print(f'Transaction {transaction_id}: COMMITED.')
     return "Commited"
 
 
