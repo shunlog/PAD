@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSocket Chat</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css">
+    
 </head>
 <body>
     <script type="text/javascript">
@@ -49,12 +51,35 @@
 
     <div style="display: flex; height: 100%; flex-direction: column">
 
-      <ul>
-        {% for item in users %}
-        <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-      
+      <table border="2" >
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Fail on "prepare" phase?</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <form action="{{ delete_url }}" method="POST">
+              <td>
+                {{ user }}
+                <input type="hidden" name="username" value="{{user}}" readonly>
+              </td>
+              <td>
+                <input type="checkbox" name="fail_on_prepare">
+              </td>
+              <td>
+                <button type="submit">Delete</button>
+              </td>
+            </form>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+          
       <form action="{{ login_url }}" method="POST">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>

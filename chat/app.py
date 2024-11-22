@@ -82,6 +82,7 @@ async def get_users_list():
 async def index():
     return await render_template("index.html", hostname=hostname, port=port,
                                  login_url=f'http://127.0.0.1:{port}/login',
+                                 delete_url=f'http://127.0.0.1:{port}/delete',
                                  users=await get_users_list())
 
 
@@ -109,7 +110,8 @@ async def add_user_to_chatroom(username):
 
 
 @app.route('/login', methods=['POST'])
-async def login():
+async def login_view():
+    '''Adds a user to the database, and shows him in the table'''
     form_data = await request.form
     username = form_data.get('username')
     password = form_data.get('password')
@@ -121,6 +123,27 @@ async def login():
     await add_user_to_chatroom(username)
 
     return redirect(request.referrer or url_for('login'))
+
+
+async def delete_user(username, fail_on_prepare):
+    '''Two-phase commit:
+    1. Delete username from chat's users table
+    2. Delete user record from the "users" service'''
+    print(username, fail_on_prepare)
+    return True
+
+
+@app.route('/delete', methods=['POST'])
+async def delete_view():
+    '''Delete user from the database'''
+    form_data = await request.form
+    username = form_data['username']
+    fail_on_prepare = bool(form_data.get('fail_on_prepare'))
+    ok = await delete_user(username, fail_on_prepare)
+    if not ok:
+        return Response("Couldn't delete user", status=400)
+
+    return redirect(request.referrer or url_for('/'))
 
 
 @app.get("/error")
