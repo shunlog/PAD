@@ -2,6 +2,7 @@ import asyncio
 from datetime import timedelta
 import os
 import traceback
+import uuid
 
 import httpx
 import grpc
@@ -16,6 +17,8 @@ import registry_pb2_grpc
 from db import get_db
 from prometheus_utils import inc_counter
 
+# seconds, after which the transaction is aborted
+PREPARE_PHASE_REQUEST_TIMEOUT = 10.0
 
 # Service discovery
 hostname = os.getenv('HOSTNAME', '0.0.0.0')
@@ -109,6 +112,19 @@ async def add_user_to_chatroom(username):
             raise ValueError("Username exists")
 
 
+async def delete_user(username):
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        try:
+            await cur.execute(
+                "DELETE FROM users WHERE username = %s", (username,)
+            )
+            await conn.commit()
+
+        except psycopg.errors.UniqueViolation:
+            raise ValueError("Couldn't delete user")
+
+
 @app.route('/login', methods=['POST'])
 async def login_view():
     '''Adds a user to the database, and shows him in the table'''
@@ -125,11 +141,36 @@ async def login_view():
     return redirect(request.referrer or url_for('login'))
 
 
-async def delete_user(username, fail_on_prepare):
+async def delete_user_2PC(username, fail_on_prepare):
     '''Two-phase commit:
     1. Delete username from chat's users table
     2. Delete user record from the "users" service'''
     print(username, fail_on_prepare)
+
+    # Prepare phase
+    transaction_id = str(uuid.uuid4())
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f'http://{gateway_addr}/users/delete/prepare',
+                                     json={'transaction_id': transaction_id,
+                                           'username': username},
+                                     timeout=PREPARE_PHASE_REQUEST_TIMEOUT)
+    if response.status_code != httpx.codes.OK:
+        return False
+    # Pretend I sent a prepare request to this node as well
+
+    # Commit phase
+    print("Transaction: Prepare phase done")
+
+    async with httpx.AsyncClient() as client:
+        # Ensure no timeout
+        response = await client.post(f'http://{gateway_addr}/users/delete/commit',
+                                     json={'transaction_id': transaction_id},
+                                     timeout=None)
+    # We assume all responses are OK when requests succeeded
+
+    # Pretend I sent a commit request to this node
+    await delete_user(username)
+
     return True
 
 
@@ -139,7 +180,7 @@ async def delete_view():
     form_data = await request.form
     username = form_data['username']
     fail_on_prepare = bool(form_data.get('fail_on_prepare'))
-    ok = await delete_user(username, fail_on_prepare)
+    ok = await delete_user_2PC(username, fail_on_prepare)
     if not ok:
         return Response("Couldn't delete user", status=400)
 

@@ -5,7 +5,7 @@ import traceback
 
 import grpc
 import click
-from quart import Quart, request, jsonify
+from quart import Quart, request, jsonify, Response
 from quart_rate_limiter import RateLimiter, RateLimit
 from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LATEST
 
@@ -53,6 +53,23 @@ async def _init_db():
 def cli_init_db():
     click.echo('Recreating database tables.')
     asyncio.get_event_loop().run_until_complete(_init_db())
+
+
+@app.route('/delete/prepare', methods=['POST'])
+async def delete_prepare_view():
+    data = await request.get_json()
+    transaction_id = data['transaction_id']
+    username = data['username']
+    print(f'Transaction {transaction_id}: PREPARED (delete user {username})')
+    return "Prepared"
+
+
+@app.route('/delete/commit', methods=['POST'])
+async def delete_commit_view():
+    data = await request.get_json()
+    transaction_id = data['transaction_id']
+    print(f'Transaction {transaction_id}: COMMITED')
+    return "Commited"
 
 
 # Prometheus endpoint
