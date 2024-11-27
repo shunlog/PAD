@@ -18,15 +18,18 @@ import (
 )
 
 const (
-    registryAddress = "service-registry:50051"
+	// Time to wait for a response from a service
+	REQUEST_TIMEOUT = 500 * time.Millisecond
+	
+    REGISTRY_ADDR = "service-registry:50051"
 	// Circuit breaker
 	N_RETRIES = 2  // Number of retries before circuit-breaking an instance
 	N_INSTANCES_TRIED = 2  // number of instances failed before returning error
 
 	// Cooldown period for querying the service registry
-	cooldownPeriod = time.Second * 10
+	COOLDOWN_T = time.Second * 10
 	// Cooldown period after blocking an instance
-	blockedPeriod = time.Second * 20
+	BLOCKED_T = time.Second * 20
 )
 
 var (
@@ -50,8 +53,8 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
     mu.Unlock()
 
     // Check if the cached value is still valid
-    if exists && time.Since(cachedInfo.lastCall) < cooldownPeriod {
-		log.Printf("cache: using cached instances for %s, %v seconds haven't passed yet\n", serviceName, cooldownPeriod)
+    if exists && time.Since(cachedInfo.lastCall) < COOLDOWN_T {
+		log.Printf("cache: using cached instances for %s, %v seconds haven't passed yet\n", serviceName, COOLDOWN_T)
         return cachedInfo.instances // Return cached instances
     }
 
@@ -90,7 +93,7 @@ func selectServiceInstance(instances []*pb.ServiceInfo) *pb.ServiceInfo {
 	// unblock instances if time has passed
 	blocked_mu.Lock()
 	for inst, t := range blocked {
-        if time.Since(t) > blockedPeriod {
+        if time.Since(t) > BLOCKED_T {
             delete(blocked, inst)
         }
     }
@@ -181,7 +184,7 @@ func proxyToInstance(instance *pb.ServiceInfo, endpointPath string, w http.Respo
 
 	// Perform the request
 	client := &http.Client{
-		Timeout: 500 * time.Millisecond,
+		Timeout: REQUEST_TIMEOUT,
 	}
 	resp, err := client.Do(proxyReq)
 	if err != nil {
@@ -217,7 +220,7 @@ func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	log.Println("Connecting to Registry gRPC server on port 50051...")
     // Connect to the gRPC server
-    conn, err := grpc.Dial(registryAddress, grpc.WithInsecure(), grpc.WithBlock())
+    conn, err := grpc.Dial(REGISTRY_ADDR, grpc.WithInsecure(), grpc.WithBlock())
     if err != nil {
         log.Fatalf("Failed to connect to registry: %v", err)
     }
