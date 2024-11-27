@@ -7,7 +7,7 @@ import uuid
 import httpx
 import grpc
 from quart import (Quart, render_template, websocket, jsonify, Response, request,
-                   url_for, redirect)
+                   url_for, send_from_directory)
 from quart_rate_limiter import RateLimiter, RateLimit
 import psycopg
 from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LATEST
@@ -25,10 +25,11 @@ hostname = os.getenv('HOSTNAME', '0.0.0.0')
 service_name = os.getenv('SERVICE_NAME')
 port = int(os.getenv('PORT', 5000))
 # TODO de-hardcode
-gateway_addr = 'gateway:5000'
+gateway_addr = 'http://gateway:5000'
 
 
-app = Quart(__name__)
+# set the static URL as it will appear in the HTML page (mind the gateway)
+app = Quart(__name__, static_url_path=f'/{service_name}/static')
 # Load environment variables starting with QUART_
 # into the app config
 app.config.from_prefixed_env()
@@ -56,6 +57,13 @@ async def _init_db():
 def cli_init_db():
     click.echo('Recreating database tables.')
     asyncio.get_event_loop().run_until_complete(_init_db())
+
+
+# The gateway strips the service-name from the URL,
+# so we have to override the static folder path
+@app.route('/static/<path:filename>')
+async def custom_static(filename):
+    return await send_from_directory('static', filename)
 
 
 # Prometheus endpoint
@@ -91,7 +99,7 @@ async def index():
 
 async def verify_user(username, password):
     async with httpx.AsyncClient() as client:
-        response = await client.post(f'http://{gateway_addr}/users/login',
+        response = await client.post(f'{gateway_addr}/users/login',
                                      json={'username': username, 'password': password})
     if response.status_code != httpx.codes.OK:
         return False
@@ -131,27 +139,24 @@ async def login_view():
     form_data = await request.form
     username = form_data.get('username')
     password = form_data.get('password')
-    print(username, password)
     valid = await verify_user(username, password)
     if not valid:
         return Response("Invalid credentials", status=401)
 
     await add_user_to_chatroom(username)
-
-    return redirect(request.referrer or url_for('login'))
+    return "User logged in successfully"
 
 
 async def delete_user_2PC(username, fail_on_prepare):
     '''Two-phase commit:
     1. Delete username from chat's users table
     2. Delete user record from the "users" service'''
-    print(username, fail_on_prepare)
 
     # Prepare phase
     transaction_id = str(uuid.uuid4())
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f'http://{gateway_addr}/users/delete/prepare',
+            f'{gateway_addr}/users/delete/prepare',
             json={'transaction_id': transaction_id,
                   'username': username,
                   'fail_on_prepare': fail_on_prepare},
@@ -166,7 +171,7 @@ async def delete_user_2PC(username, fail_on_prepare):
 
     async with httpx.AsyncClient() as client:
         # Ensure no timeout
-        response = await client.post(f'http://{gateway_addr}/users/delete/commit',
+        response = await client.post(f'{gateway_addr}/users/delete/commit',
                                      json={'transaction_id': transaction_id},
                                      timeout=None)
     # We assume all responses are OK when requests succeeded
@@ -186,8 +191,7 @@ async def delete_view():
     ok = await delete_user_2PC(username, fail_on_prepare)
     if not ok:
         return Response("Couldn't delete user", status=500)
-
-    return redirect(request.referrer or url_for('/'))
+    return "User deleted successfully"
 
 
 @app.get("/error")
@@ -217,12 +221,10 @@ async def listen_for_messages():
     await conn.set_autocommit(True)
     async with conn.cursor() as cur:
         await cur.execute("LISTEN messages;")
-        print("Listening for new messages...")
 
         while True:
             # await conn.wait(notify=True)
             async for notify in conn.notifies():
-                print("Received notification:", notify.payload)
                 # Broadcast to clients in the relevant chatroom
                 # Extract chatroom_id from the payload
                 chatroom_id, message = notify.payload.split(',', 1)
@@ -247,7 +249,6 @@ async def insert_message(chatroom_id, user_id, content):
             f"NOTIFY messages, '{chatroom_id},{content}'"
         )
 
-        print("Inserted message")
         await conn.commit()
 
 
@@ -291,9 +292,7 @@ async def register_service(service_name, address):
             # Register the service with the registry
             try:
                 response = registry_stub.RegisterService(service_info)
-                if response.success:
-                    print(f"Registered {service_name}")
-                else:
+                if not response.success:
                     print(f"Failed register")
             except grpc.RpcError as e:
                 print(f"RPC error: {e}")
@@ -322,13 +321,11 @@ async def startup_RPC_task():
         service_name, f"{hostname}:{port}"))
 
     app.register_task.add_done_callback(task_done_callback)
-    print("Registered RPC task")
 
 
 @app.after_serving
 async def shutdown_RPC_task():
     app.register_task.cancel()
-    print("Shut down RPC task")
 
 
 @app.before_serving

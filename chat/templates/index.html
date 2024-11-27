@@ -5,49 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSocket Chat</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css">
+    <script src="{{ url_for('static', filename='main.js') }}" defer></script>
     
 </head>
 <body>
-    <script type="text/javascript">
-        let ws;
 
-        function connect(event) {
-            event.preventDefault(); // Prevent form submission
-
-            const chatroom = document.getElementById("chatroom").value;
-            if (ws) {
-                ws.close(); // Close existing connection if present
-            }
-            ws = new WebSocket(`ws://127.0.0.1:{{port}}/chat/${chatroom}`);
-
-            ws.addEventListener('message', function (event) {
-                const li = document.createElement("li");
-                li.appendChild(document.createTextNode(event.data));
-                document.getElementById("messages").appendChild(li);
-            });
-
-            ws.addEventListener('open', function () {
-                console.log(`Connected to chatroom: ${chatroom}`);
-            });
-
-            ws.addEventListener('close', function () {
-                console.log(`Disconnected from chatroom: ${chatroom}`);
-            });
-
-            ws.addEventListener('error', function (error) {
-                console.error('WebSocket error:', error);
-            });
-        }
-
-        function send(event) {
-            const message = (new FormData(event.target)).get("message");
-            if (message && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(message);
-            }
-            event.target.reset(); // Reset the form after sending
-            return false;
-        }
-    </script>
 
     <div style="display: flex; height: 100%; flex-direction: column">
 
@@ -63,7 +25,7 @@
         <tbody>
           {% for user in users %}
           <tr>
-            <form action="{{ delete_url }}" method="POST">
+            <form class="fetch-form" action="/chat/delete" method="POST">
               <td>
                 {{ user }}
                 <input type="hidden" name="username" value="{{user}}" readonly>
@@ -80,7 +42,7 @@
         </tbody>
       </table>
           
-      <form action="{{ login_url }}" method="POST">
+      <form class="fetch-form" action="/chat/login" method="POST">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>
 

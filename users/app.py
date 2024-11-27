@@ -203,10 +203,8 @@ async def register_service(service_name, address):
             # Register the service with the registry
             try:
                 response = registry_stub.RegisterService(service_info)
-                if response.success:
-                    print(f"Registered {service_name}")
-                else:
-                    print(f"Failed register")
+                if not response.success:
+                    print(f"Failed registering")
             except grpc.RpcError as e:
                 print(f"RPC error: {e}")
 
@@ -234,13 +232,11 @@ async def startup_RPC_task():
         service_name, f"{hostname}:{port}"))
 
     app.register_task.add_done_callback(task_done_callback)
-    print("Registered RPC task")
 
 
 @app.after_serving
 async def shutdown_RPC_task():
     app.register_task.cancel()
-    print("Shut down RPC task")
 
 
 @app.before_serving

@@ -54,7 +54,6 @@ func queryServiceInstances(client pb.ServiceRegistryClient, serviceName string) 
 
     // Check if the cached value is still valid
     if exists && time.Since(cachedInfo.lastCall) < COOLDOWN_T {
-		log.Printf("cache: using cached instances for %s, %v seconds haven't passed yet\n", serviceName, COOLDOWN_T)
         return cachedInfo.instances // Return cached instances
     }
 
@@ -103,7 +102,6 @@ func selectServiceInstance(instances []*pb.ServiceInfo) *pb.ServiceInfo {
 	for range len(instances){
 		selectedInstance := instances[roundRobinIndex]
 		roundRobinIndex = (roundRobinIndex + 1) % len(instances)
-		log.Println("Round robin: %v/n", roundRobinIndex)
 
 		// Check if instance is not blocked
 		is_blocked := false
