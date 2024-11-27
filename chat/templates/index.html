@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSocket Chat</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css">
     <script src="{{ url_for('static', filename='main.js') }}" defer></script>
     
-</head>
-<body>
+  </head>
+  <body>
 
 
     <div style="display: flex; height: 100%; flex-direction: column">
@@ -41,7 +41,7 @@
           {% endfor %}
         </tbody>
       </table>
-          
+      
       <form class="fetch-form" action="/chat/login" method="POST">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>
@@ -52,20 +52,20 @@
         <button type="submit">Submit</button>
       </form>
 
-        <form onsubmit="connect(event)">
-            <label for="chatroom">Chatroom:</label>
-            <input type="text" id="chatroom" name="chatroom" required minlength="1" />
-            <button type="submit">Connect</button>
-        </form>
-        
+      <form onsubmit="connect(event)">
+        <label for="chatroom">Chatroom:</label>
+        <input type="text" id="chatroom" name="chatroom" required minlength="1" />
+        <button type="submit">Connect</button>
+      </form>
+      
 
-        <form onsubmit="return send(event)">
-            <input type="text" name="message" minlength="1" placeholder="Type your message" />
-            <button type="submit">Send</button>
-        </form>
+      <form onsubmit="return send(event)">
+        <input type="text" name="message" minlength="1" placeholder="Type your message" />
+        <button type="submit">Send</button>
+      </form>
 
-        <ul id="messages" style="flex-grow: 1; list-style-type: none"></ul>
-        
+      <ul id="messages" style="flex-grow: 1; list-style-type: none"></ul>
+      
     </div>
-</body>
+  </body>
 </html>
