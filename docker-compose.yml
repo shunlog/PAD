@@ -1,5 +1,16 @@
 services:
 
+  redis-1:
+    image: redis/redis-stack-server:latest
+    ports:
+      - 6379:6379
+      - 13333:8001  # Redis Insight
+
+  redis-2:
+    image: redis/redis-stack-server:latest
+    expose:
+      - 6379
+    
   prometheus:
     image: prom/prometheus
     ports:
