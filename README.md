@@ -109,3 +109,14 @@ All services, including Gateway, Service discovery, databases and Prometheus + G
 run inside Docker containers and are managed with Docker Compose.
 
 
+## Consistent hashing
+
+Code inspired from [this blog post](https://web.archive.org/web/20110713202731/http://www.lexemetech.com/2007/11/consistent-hashing.html).
+
+To test the standard deviation of selected cache instances,
+run `python -m unittest test_consistent_hashing.py`.
+
+To test it in the app, notice the output when sending messages:
+in different chatrooms, a different cache instance is used.
+For example, in `/chat/chatroom1` you might see `Cached on: redis-1`,
+while in `/chat/chatroom2` you might see `Cached on: redis-2`.
