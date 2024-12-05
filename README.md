@@ -120,3 +120,20 @@ To test it in the app, notice the output when sending messages:
 in different chatrooms, a different cache instance is used.
 For example, in `/chat/chatroom1` you might see `Cached on: redis-1`,
 while in `/chat/chatroom2` you might see `Cached on: redis-2`.
+
+
+## Database replication
+
+Start one database first, to let it become a primary, then start the rest.
+Test in the app that the database works.
+
+Test a secondary with:
+```sh
+psql -p 5445 -h localhost -U docker
+```
+
+Or test the primary by opening a shell:
+```sh
+sudo docker compose exec pg-0 sh 
+psql -U docker
+```

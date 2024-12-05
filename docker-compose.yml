@@ -52,7 +52,9 @@ services:
       REPMGR_NODE_NETWORK_NAME: pg-0
       
   pg-1:
-    container_name: pg-1    
+    container_name: pg-1
+    ports:
+      - 5445:5432
     <<: *service-common
     volumes:
       - pg_1_data:/bitnami/postgresql
@@ -122,7 +124,7 @@ services:
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
-      - POSTGRES_SERVER=haproxy
+      - POSTGRES_SERVER=pg-0
       - POSTGRES_USER=docker
       - POSTGRES_DB=docker
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-chat-password
