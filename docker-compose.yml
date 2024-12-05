@@ -11,9 +11,9 @@ x-common-env:
   REPMGR_PORT_NUMBER: 5432
   REPMGR_PRIMARY_HOST: pg-0
   REPMGR_PRIMARY_PORT: 5432
-  POSTGRESQL_POSTGRES_PASSWORD: postgres
+  POSTGRESQL_POSTGRES_PASSWORD: J39OU6vVuQBmVon1S9Vd
   POSTGRESQL_USERNAME: docker
-  POSTGRESQL_PASSWORD: docker
+  POSTGRESQL_PASSWORD: J39OU6vVuQBmVon1S9Vd  # hardcoded for now
   POSTGRESQL_DATABASE: docker
   POSTGRESQL_SHARED_PRELOAD_LIBRARIES: pgaudit, pg_stat_statements
   POSTGRESQL_SYNCHRONOUS_COMMIT_MODE: remote_write
@@ -122,9 +122,9 @@ services:
       - QUART_APP=app:app
       - QUART_BODY_TIMEOUT=5
       - QUART_RESPONSE_TIMEOUT=5
-      - POSTGRES_SERVER=postgres-chat
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=chat
+      - POSTGRES_SERVER=haproxy
+      - POSTGRES_USER=docker
+      - POSTGRES_DB=docker
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgres-chat-password
       - CACHE_HOSTNAME_1=redis-1
       - CACHE_HOSTNAME_2=redis-2
