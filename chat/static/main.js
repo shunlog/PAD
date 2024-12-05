@@ -6,12 +6,12 @@ function connect() {
         console.log("socket_port is not set.");
         return;
     } 
-    // socket path will be the same as the current room path with the prefix "/socket"
-    const socket_path = window.location.pathname // e.g. "/chat/room1"
+
+    const chatroom = window.location.pathname.split('/').pop();
     if (ws) {
         ws.close(); // Close existing connection if present
     }
-    const socket_url = `ws://127.0.0.1:${socket_port}/socket${socket_path}`;
+    const socket_url = `ws://127.0.0.1:${socket_port}/socket/chat/${chatroom}`;
     console.log(socket_url);
     ws = new WebSocket(socket_url);
 

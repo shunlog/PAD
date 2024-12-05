@@ -70,7 +70,12 @@
         <button type="submit">Send</button>
       </form>
 
-      <ul id="messages" style="flex-grow: 1; list-style-type: none"></ul>
+      <ul id="messages" style="flex-grow: 1; list-style-type: none">
+        {% for item in messages %}
+        <li>{{ item }}</li>
+        {% endfor %}
+        
+      </ul>
       
     </div>
   </body>

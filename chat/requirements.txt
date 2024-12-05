@@ -4,3 +4,4 @@ grpcio-tools
 psycopg[binary]
 prometheus-client
 httpx
+redis

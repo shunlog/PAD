@@ -11,14 +11,19 @@ from quart import (Quart, render_template, websocket, jsonify, Response, request
 from quart_rate_limiter import RateLimiter, RateLimit
 import psycopg
 from prometheus_client import generate_latest, Counter, Summary, CONTENT_TYPE_LATEST
+import redis
 
 import registry_pb2
 import registry_pb2_grpc
 from db import get_db
 from prometheus_utils import inc_counter
+from consistent_hashing import ConsistentHashRing
 
 # seconds, after which the transaction is aborted
 PREPARE_PHASE_REQUEST_TIMEOUT = 3.0
+
+# number of last messages to keep in cache
+NUM_LAST_MSG_CACHED = 3
 
 # Service discovery
 hostname = os.getenv('HOSTNAME', '0.0.0.0')
@@ -72,11 +77,69 @@ async def metrics():
     return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 
-@app.route('/status')
-@inc_counter(req_counter)
-@req_time.time()
-async def status_view():
-    return jsonify({"status": "Alive"})
+ring = ConsistentHashRing(100)
+ring["node1"] = redis.Redis(host=os.getenv('CACHE_HOSTNAME_1'), port=6379)
+ring["node2"] = redis.Redis(host=os.getenv('CACHE_HOSTNAME_2'), port=6379)
+
+
+# Store connected clients by chatroom
+connected_clients = {}
+
+
+async def listen_for_messages():
+    conn = await get_db()
+    await conn.set_autocommit(True)
+    async with conn.cursor() as cur:
+        await cur.execute("LISTEN messages;")
+
+        while True:
+            # await conn.wait(notify=True)
+            async for notify in conn.notifies():
+                # Broadcast to clients in the relevant chatroom
+                # Extract chatroom_id from the payload
+                chatroom_id, message = notify.payload.split(',', 1)
+                await broadcast_to_clients(chatroom_id, message)
+
+
+async def broadcast_to_clients(chatroom_id, message):
+    if chatroom_id in connected_clients:
+        for client in connected_clients[chatroom_id]:
+            await client.send(message)
+
+
+# Add a new message
+def cache_message(chat_id, content):
+    r = ring[str(chat_id)]
+    redis_host = r.connection_pool.get_connection('PING').host
+    print(f"Cached on: {redis_host}")
+    r.lpush(chat_id, content)  # Add the message to the list
+    r.ltrim(chat_id, 0, NUM_LAST_MSG_CACHED-1)
+
+
+async def insert_message(chatroom_id, user_id, content):
+    cache_message(chatroom_id, content)
+
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        await cur.execute(
+            'INSERT INTO messages (chatroom_id, user_id, content) VALUES (%s, %s, %s)',
+            (chatroom_id, user_id, content)
+        )
+
+        await cur.execute(
+            f"NOTIFY messages, '{chatroom_id},{content}'"
+        )
+
+        await conn.commit()
+
+
+# Get the last 5 messages
+def get_messages(chat_id):
+    '''Retrieve last cached messages as a list'''
+    r = ring[str(chat_id)]
+    bl = r.lrange(chat_id, 0, -1)
+    sl = [b.decode() for b in bl]
+    return sl[::-1]
 
 
 async def get_users_list():
@@ -92,6 +155,7 @@ async def get_users_list():
 @req_time.time()
 async def index(chat_id):
     return await render_template("index.html", hostname=hostname, socket_port=port,
+                                 messages=get_messages(chat_id),
                                  login_url=f'http://127.0.0.1:{port}/login',
                                  delete_url=f'http://127.0.0.1:{port}/delete',
                                  users=await get_users_list())
@@ -212,46 +276,6 @@ async def view_sleep(duration):
     return Response(f"Slept for {duration}ms.")
 
 
-# Store connected clients by chatroom
-connected_clients = {}
-
-
-async def listen_for_messages():
-    conn = await get_db()
-    await conn.set_autocommit(True)
-    async with conn.cursor() as cur:
-        await cur.execute("LISTEN messages;")
-
-        while True:
-            # await conn.wait(notify=True)
-            async for notify in conn.notifies():
-                # Broadcast to clients in the relevant chatroom
-                # Extract chatroom_id from the payload
-                chatroom_id, message = notify.payload.split(',', 1)
-                await broadcast_to_clients(chatroom_id, message)
-
-
-async def broadcast_to_clients(chatroom_id, message):
-    if chatroom_id in connected_clients:
-        for client in connected_clients[chatroom_id]:
-            await client.send(message)
-
-
-async def insert_message(chatroom_id, user_id, content):
-    conn = await get_db()
-    async with conn.cursor() as cur:
-        await cur.execute(
-            'INSERT INTO messages (chatroom_id, user_id, content) VALUES (%s, %s, %s)',
-            (chatroom_id, user_id, content)
-        )
-
-        await cur.execute(
-            f"NOTIFY messages, '{chatroom_id},{content}'"
-        )
-
-        await conn.commit()
-
-
 @app.websocket('/socket/chat/<chatroom_id>')
 async def chat(chatroom_id):
     # Register the new client
@@ -302,6 +326,13 @@ async def register_service(service_name, address):
     except RuntimeError as e:
         print("Couldn't connect to Service Registry.")
         print(e)
+
+
+@app.route('/status')
+@inc_counter(req_counter)
+@req_time.time()
+async def status_view():
+    return jsonify({"status": "Alive"})
 
 
 def task_done_callback(task):
