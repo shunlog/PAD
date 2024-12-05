@@ -20,8 +20,26 @@ x-common-env:
   POSTGRESQL_NUM_SYNCHRONOUS_REPLICAS: 1
 
 
+configs:
+  haproxy:
+    file: ./haproxy.cfg
 
 services:
+
+  haproxy:
+    container_name: haproxy
+    image: haproxy
+    mem_limit: 8192m
+    ports:
+      - 3000:3000
+      - 5432:5432
+    privileged: true
+    configs:
+      - source: haproxy
+        target: /usr/local/etc/haproxy/haproxy.cfg
+    volumes:
+      - ./standby-check.sh:/build-psql/standby-check.sh  # Mount the script
+      - ./primary-check.sh:/build-psql/primary-check.sh  # Mount the script
 
   pg-0:
     container_name: pg-0
