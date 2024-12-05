@@ -1,14 +1,19 @@
 
 let ws;
 
-function connect(event) {
-    event.preventDefault(); // Prevent form submission
-
-    const chatroom = document.getElementById("chatroom").value;
+function connect() {
+    if (typeof socket_port == "undefined") {
+        console.log("socket_port is not set.");
+        return;
+    } 
+    // socket path will be the same as the current room path with the prefix "/socket"
+    const socket_path = window.location.pathname // e.g. "/chat/room1"
     if (ws) {
         ws.close(); // Close existing connection if present
     }
-    ws = new WebSocket(`ws://127.0.0.1:{{port}}/chat/${chatroom}`);
+    const socket_url = `ws://127.0.0.1:${socket_port}/socket${socket_path}`;
+    console.log(socket_url);
+    ws = new WebSocket(socket_url);
 
     ws.addEventListener('message', function (event) {
         const li = document.createElement("li");
@@ -85,4 +90,4 @@ function overrideFormsWithClass(className) {
 // Usage: Call this function and pass the target class name
 overrideFormsWithClass('fetch-form');
 
-
+connect();

@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSocket Chat</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css" type="text/css">
+    <script>
+      const socket_port = "{{ socket_port }}";
+    </script>
     <script src="{{ url_for('static', filename='main.js') }}" defer></script>
     
   </head>
@@ -52,11 +55,14 @@
         <button type="submit">Submit</button>
       </form>
 
-      <form onsubmit="connect(event)">
-        <label for="chatroom">Chatroom:</label>
-        <input type="text" id="chatroom" name="chatroom" required minlength="1" />
-        <button type="submit">Connect</button>
-      </form>
+      <p>
+        <b>Chatroom:</b> <span id="chatroom"></span>
+      </p>
+      <script>
+        const chatroom = window.location.pathname.split('/').pop();
+        document.getElementById("chatroom").textContent = chatroom;
+      </script>
+      
       
 
       <form onsubmit="return send(event)">

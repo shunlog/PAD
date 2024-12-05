@@ -87,11 +87,11 @@ async def get_users_list():
     return [row[0] for row in rows]
 
 
-@app.get("/")
+@app.get("/chat/<chat_id>")
 @inc_counter(req_counter)
 @req_time.time()
-async def index():
-    return await render_template("index.html", hostname=hostname, port=port,
+async def index(chat_id):
+    return await render_template("index.html", hostname=hostname, socket_port=port,
                                  login_url=f'http://127.0.0.1:{port}/login',
                                  delete_url=f'http://127.0.0.1:{port}/delete',
                                  users=await get_users_list())
@@ -252,7 +252,7 @@ async def insert_message(chatroom_id, user_id, content):
         await conn.commit()
 
 
-@app.websocket('/chat/<chatroom_id>')
+@app.websocket('/socket/chat/<chatroom_id>')
 async def chat(chatroom_id):
     # Register the new client
     if chatroom_id not in connected_clients:
@@ -297,12 +297,11 @@ async def register_service(service_name, address):
             except grpc.RpcError as e:
                 print(f"RPC error: {e}")
 
-    while True:
-        try:
-            await send_info()
-        except RuntimeError as e:
-            print(e)
-        await asyncio.sleep(15)
+    try:
+        await send_info()
+    except RuntimeError as e:
+        print("Couldn't connect to Service Registry.")
+        print(e)
 
 
 def task_done_callback(task):
