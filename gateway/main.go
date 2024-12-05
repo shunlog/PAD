@@ -39,6 +39,8 @@ var (
 
 	blocked = make(map[*pb.ServiceInfo]time.Time)
 	blocked_mu  sync.Mutex // Mutex for `blocked` map
+
+	client  pb.ServiceRegistryClient
 )
 
 type cachedServiceInfo struct {
@@ -215,6 +217,112 @@ func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
+
+type OperationFunc func(userID string) error
+
+func deleteFromChatService(userID string) error {
+	instances := queryServiceInstances(client, "chat")
+	instance := selectServiceInstance(instances)
+	url := fmt.Sprintf("http://%s/user/%s", instance.Address, userID)
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("delete from chat service failed: %v", err)
+	}
+	return nil
+}
+
+func rollbackDeleteInChat(userID string) error {
+	instances := queryServiceInstances(client, "chat")
+	instance := selectServiceInstance(instances)
+	url := fmt.Sprintf("http://%s/user", instance.Address)
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.URL.RawQuery = fmt.Sprintf("id=%s", userID) // Example of encoding ID in the request
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("recreate in chat service failed: %v", err)
+	}
+	return nil
+}
+
+func deleteFromUsersService(userID string) error {
+	instances := queryServiceInstances(client, "users")
+	instance := selectServiceInstance(instances)
+	url := fmt.Sprintf("http://%s/user/%s", instance.Address, userID)
+
+	
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("delete from users service failed: %v", err)
+	}
+	return nil
+}
+
+
+func SagaTransaction(userID string) error {
+	// Step 1: Execute the first operation
+	if err := deleteFromChatService(userID); err != nil {
+		return fmt.Errorf("Deleting from chat service failed: %v", err)
+	}
+
+	// Step 2: Execute the second operation
+	if err := deleteFromUsersService(userID); err != nil {
+		// Rollback the first operation if the second operation fails
+		if rollbackErr := rollbackDeleteInChat(userID); rollbackErr != nil {
+			log.Printf("Rollback in chat service failed: %v", rollbackErr)
+		}
+		return fmt.Errorf("Deleting from users service failed: %v", err)
+	}
+
+	return nil
+}
+
+func deleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	// Validate the method
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract the username from the URL
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) != 2 || parts[0] != "user" {
+		http.Error(w, "invalid URL", http.StatusBadRequest)
+		return
+	}
+	username := parts[1]
+
+	// Perform the saga transaction
+	err := SagaTransaction(username)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to delete user: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Respond with success
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("User %s successfully deleted", username)))
+}
+
+
 func main() {
 	log.Println("Connecting to Registry gRPC server on port 50051...")
     // Connect to the gRPC server
@@ -224,14 +332,11 @@ func main() {
     }
     defer conn.Close()
 
-    // Create a client for the ServiceRegistry
-    client := pb.NewServiceRegistryClient(conn)
+    client = pb.NewServiceRegistryClient(conn)
 
-	// Start the HTTP server
+	http.HandleFunc("/status", HealthCheckHandler)
+	http.HandleFunc("/user/", deleteUserHandler)
 	http.HandleFunc("/", proxyHandler(client))
-    // Set up the HTTP server and routes
-    http.HandleFunc("/status", HealthCheckHandler)
-
 
 	log.Println("Starting HTTP server on port 5000...")
 	log.Fatal(http.ListenAndServe(":5000", nil))

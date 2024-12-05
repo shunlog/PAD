@@ -55,7 +55,8 @@ function overrideFormsWithClass(className) {
             // Collect form data
             const formData = new FormData(form);
             const action = form.getAttribute('action');
-
+            const method = form.getAttribute('method');
+            
             if (!action) {
                 console.error('Form action URL is not specified.');
                 return;
@@ -64,7 +65,7 @@ function overrideFormsWithClass(className) {
             try {
                 // Send POST request to the form's action URL
                 const response = await fetch(action, {
-                    method: 'POST',
+                    method: method,
                     body: formData
                 });
 

@@ -66,3 +66,16 @@ async def verify_token(token: str) -> bool:
             "SELECT EXISTS(SELECT 1 FROM sessions WHERE token = %s)", (token,))
         exists = (await cur.fetchone())[0]
         return exists
+
+
+async def delete_user(username: str):
+    conn = await get_db()
+    async with conn.cursor() as cur:
+        try:
+            await cur.execute(
+                "DELETE FROM users WHERE username = %s", (username,)
+            )
+            await conn.commit()
+
+        except psycopg.errors.UniqueViolation:
+            raise ValueError("Couldn't delete user")

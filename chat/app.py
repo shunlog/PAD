@@ -6,6 +6,7 @@ import uuid
 
 import httpx
 import grpc
+import click
 from quart import (Quart, render_template, websocket, jsonify, Response, request,
                    url_for, send_from_directory)
 from quart_rate_limiter import RateLimiter, RateLimit
@@ -171,7 +172,7 @@ async def verify_user(username, password):
     return True
 
 
-async def add_user_to_chatroom(username):
+async def register_user(username):
     conn = await get_db()
     async with conn.cursor() as cur:
         try:
@@ -197,63 +198,21 @@ async def delete_user(username):
             raise ValueError("Couldn't delete user")
 
 
-@app.route('/login', methods=['POST'])
-async def login_view():
+@app.route('/user', methods=['POST'])
+async def user_register_view():
     '''Adds a user to the database, and shows him in the table'''
     form_data = await request.form
     username = form_data.get('username')
-    password = form_data.get('password')
-    valid = await verify_user(username, password)
-    if not valid:
-        return Response("Invalid credentials", status=401)
-
-    await add_user_to_chatroom(username)
-    return "User logged in successfully"
+    await register_user(username)
+    return "User registered successfully"
 
 
-async def delete_user_2PC(username, fail_on_prepare):
-    '''Two-phase commit:
-    1. Delete username from chat's users table
-    2. Delete user record from the "users" service'''
-
-    # Prepare phase
-    transaction_id = str(uuid.uuid4())
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f'{gateway_addr}/users/delete/prepare',
-            json={'transaction_id': transaction_id,
-                  'username': username,
-                  'fail_on_prepare': fail_on_prepare},
-            timeout=PREPARE_PHASE_REQUEST_TIMEOUT)
-
-    if response.status_code != httpx.codes.OK:
-        return False
-    # Pretend I sent a prepare request to this node as well
-
-    # Commit phase
-    print("Transaction: Prepare phase done")
-
-    async with httpx.AsyncClient() as client:
-        # Ensure no timeout
-        response = await client.post(f'{gateway_addr}/users/delete/commit',
-                                     json={'transaction_id': transaction_id},
-                                     timeout=None)
-    # We assume all responses are OK when requests succeeded
-
-    # Pretend I sent a commit request to this node
-    await delete_user(username)
-
-    return True
-
-
-@app.route('/delete', methods=['POST'])
-async def delete_view():
+@app.route('/user/<username>', methods=['DELETE'])
+async def delete_view(username):
     '''Delete user from the database'''
-    form_data = await request.form
-    username = form_data['username']
-    fail_on_prepare = bool(form_data.get('fail_on_prepare'))
-    ok = await delete_user_2PC(username, fail_on_prepare)
-    if not ok:
+    try:
+        await delete_user(username)
+    except ValueError:
         return Response("Couldn't delete user", status=500)
     return "User deleted successfully"
 
