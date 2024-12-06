@@ -63,6 +63,16 @@ services:
       REPMGR_NODE_NAME: pg-1
       REPMGR_NODE_NETWORK_NAME: pg-1
 
+  pg-2:
+    container_name: pg-2
+    <<: *service-common
+    volumes:
+      - pg_2_data:/bitnami/postgresql
+    environment:
+      <<: *common-env
+      REPMGR_NODE_NAME: pg-2
+      REPMGR_NODE_NETWORK_NAME: pg-2
+
 
   redis-1:
     image: redis/redis-stack-server:latest
@@ -288,6 +298,8 @@ volumes:
   grafana-storage: {}
   pg_0_data:
   pg_1_data:
+  pg_2_data:
+
 
 secrets:
   postgres-users-password:
