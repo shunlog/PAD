@@ -6,11 +6,7 @@ class ConsistentHashRing(object):
     """Implement a consistent hashing ring."""
 
     def __init__(self, replicas=100):
-        """Create a new ConsistentHashRing.
-
-        :param replicas: number of replicas.
-
-        """
+        """Create a new ConsistentHashRing. """
         self.replicas = replicas
         self._keys = []
         self._nodes = {}
@@ -52,9 +48,8 @@ class ConsistentHashRing(object):
         but not less than that of the given
         name is returned.   If the hash of the
         given name is greater than the greatest
-        hash, returns the lowest hashed node.
+        hash, returns the lowest hashed node. """
 
-        """
         hash_ = self._hash(key)
         start = bisect.bisect(self._keys, hash_)
         if start == len(self._keys):
